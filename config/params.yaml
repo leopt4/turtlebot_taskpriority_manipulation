@@ -1,0 +1,12 @@
+joint_lower_limits: [0.314159265, 0.314159265,0.314159265,0.314159265]
+joint_upper_limits: []
+
+weight_matric: []
+
+tracking : False
+
+velocity_scaling: False
+dq_max_vel: [2.0, 2.1, 2.3, 2.5]
+
+timer_thresh: 0.1
+
