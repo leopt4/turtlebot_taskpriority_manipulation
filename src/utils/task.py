@@ -145,6 +145,23 @@ class Task:
         self.activation = value
 
 
+class EEPosition3D(Task):
+    def __init__(self, name, desired, feedforward, gain):
+        super().__init__(name, desired, feedforward, gain)
+        self.J = np.zeros((desired.shape[0], 4))
+        self.err = np.zeros(desired.shape)
+        # self.link = link
+        self.FeedForward = feedforward
+        self.K = gain
+
+    def update(self, robot):
+        self.J = robot.getEEJacobian()[0:3, :]
+        self.err = self.K @ (self.getDesired() - robot.getEEposition()) + self.getFeedForward().reshape(self.getDesired().shape)
+
+
+    def track_err(self):
+        self.err_hist.append(np.linalg.norm(self.getError()))
+
 
 class Position3D(Task):
     def __init__(self, name, desired, feedforward, gain, link):

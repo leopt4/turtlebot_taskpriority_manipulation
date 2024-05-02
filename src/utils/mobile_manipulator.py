@@ -2,6 +2,15 @@ from .common import *
 import math
 import numpy as np
 
+class ManipulatorParams:
+    def __init__(self) -> None:
+        self.dof = 4       
+        self.bx = 0.0132        # [met]
+        self.bz = 0.108         # [met]
+        self.d1 = 0.142         # [met]
+        self.d2 = 0.1588        # [met]
+        self.mz = 0.0722        # [met]
+        self.mx = 0.0565        # [met]
 class MobileManipulator:
     '''
         Constructor.
@@ -13,28 +22,25 @@ class MobileManipulator:
         alpha (Numpy array): list of rotations around X-axis
         revolute (list of Bool): list of flags specifying if the corresponding joint is a revolute joint
     '''
-    def __init__(self, d, theta, a, alpha, revolute):
-        self.d = d
-        self.theta = theta
-        self.a = a
-        self.alpha = alpha
-        self.revolute = revolute
+    def __init__(self):
+        self.revolute = [True, True, True, True]
+
+        self.manipulatorParams = ManipulatorParams()
 
         # List of joint types extended with base joints
         self.revoluteExt = [True, False] + self.revolute
 
-        self.r = 0  # Distance from robot centre to manipulator base
-        self.dof = len(self.revoluteExt)  # Number of DOF of the system
+        self.dof = 4 #len(self.revoluteExt)  # Number of DOF of the system
 
         # Vector of joint positions (manipulator)
         self.q = np.zeros((len(self.revolute), 1))
         self.q_hist = []
 
         # Vector of base pose (position & orientation)
-        self.eta = np.zeros((3, 1))
+        self.eta = np.zeros((4, 1))
 
         # Initialise robot state
-        self.update(np.zeros((self.dof, 1)), 0.0)
+        # self.update(np.zeros((self.dof, 1)), 0.0)
 
     '''
         Method that updates the state of the robot.
@@ -152,8 +158,8 @@ class MobileManipulator:
     '''
         Method that returns the end-effector Jacobian.
     '''
-    def getEEJacobian(self):
-        return jacobian(self.T, self.revoluteExt)
+    # def getEEJacobian(self):
+    #     return jacobian(self.T, self.revoluteExt)
 
     '''
         Method that returns the end-effector transformation.
@@ -204,34 +210,57 @@ class MobileManipulator:
         self.eta = np.zeros((3, 1))
         self.update(np.zeros((self.dof, 1)), 0.0)
 
-    def getArmJacobian(self): 
-        J = np.zeros((6, self.arm.dof))
-        q1, q2, q3, q4  = self.arm.q
+    '''
+        Method that returns the end-effector Jacobian.
+    '''
+    def getEEJacobian(self): 
+        J = np.zeros((6, self.manipulatorParams.dof))
+        q1, q2, q3, q4  = self.q
     
-        l1p     = -self.arm.l1 * math.sin(q2)
-        l2p     =  self.arm.l2 * math.cos(q3)
-        A       =  self.arm.lee + l1p + l2p + self.arm.lb
+        l1p     = -self.manipulatorParams.d1 * math.sin(q2)               #projection of d1 on x-axis 
+        l2p     =  self.manipulatorParams.d2 * math.cos(q3)               #projection of d2 on x-axis
+        l       =  self.manipulatorParams.bx + l1p + l2p + self.manipulatorParams.mx    #total length from base to ee top projection 
 
-        dx_dq1  = -A * math.sin(q1) * math.sin(self.eta[3]) + A * math.cos(q1) * math.cos(self.eta[3]) 
-        dy_dq1  =  A * math.sin(q1) * math.cos(self.eta[3]) + A * math.cos(q1) * math.sin(self.eta[3])
+        # dx_db1  = 
+        dx_dq1  = -l * math.sin(q1) * math.cos(self.eta[3]) - l * math.cos(q1) * math.sin(self.eta[3]) 
+        dy_dq1  = -l * math.sin(q1) * math.sin(self.eta[3]) + l * math.cos(q1) * math.cos(self.eta[3])
         
         
-        dx_dq2  = -self.arm.l1 * math.cos(q2) * math.cos(q1) * math.sin(self.eta[3]) + (-self.arm.l1 * math.cos(q2) * math.sin(q1)) * math.cos(self.eta[3]) 
-        dy_dq2  =  self.arm.l1 * math.cos(q2) * math.cos(q1) *-math.cos(self.eta[3]) + (-self.arm.l1 * math.cos(q2) * math.sin(q1)) * math.sin(self.eta[3]) 
-        dz_dq2  =  self.arm.l1 * math.sin(q2)
+        dx_dq2  = -self.manipulatorParams.d1 * math.cos(q2) * (math.cos(q1) * math.cos(self.eta[3]) - math.sin(q1) * math.sin(self.eta[3])) 
+        dy_dq2  = -self.manipulatorParams.d1 * math.cos(q2) * (math.cos(q1) * math.sin(self.eta[3]) + math.sin(q1) * math.cos(self.eta[3])) 
+        dz_dq2  =  self.manipulatorParams.d1 * math.sin(q2)
 
 
-        dx_dq3  = -self.arm.l2 * math.sin(q3) * math.cos(q1) * math.sin(self.eta[3]) + (-self.arm.l2 * math.sin(q3) * math.sin(q1)) * math.cos(self.eta[3]) 
-        dy_dq3  = -self.arm.l2 * math.sin(q3) * math.cos(q1) *-math.cos(self.eta[3]) + (-self.arm.l2 * math.sin(q3) * math.sin(q1)) * math.sin(self.eta[3])
-        dz_dq3  = -self.arm.l2*math.cos(q3)
+        dx_dq3  = -self.manipulatorParams.d2 * math.sin(q3) * (math.cos(q1) * math.cos(self.eta[3]) - math.sin(q1) * math.sin(self.eta[3])) 
+        dy_dq3  = -self.manipulatorParams.d2 * math.sin(q3) * (math.cos(q1) * math.cos(self.eta[3]) - math.sin(q1) * math.sin(self.eta[3])) 
+        dz_dq3  = -self.manipulatorParams.d2 * math.cos(q3)
 
-        J[:, 0] = np.array([dx_dq1, dy_dq1,      0, 0, 0, 1]) # derivertive by q1
-        J[:, 1] = np.array([dx_dq2, dy_dq2, dz_dq2, 0, 0, 0]) # derivertive by q2
-        J[:, 2] = np.array([dx_dq3, dy_dq3, dz_dq3, 0, 0, 0]) # derivertive by q3
-        J[:, 3] = np.array([0, 0, 0, 0, 0, 1]) # derivertive by q4
+        # J[:, 0] = np.array([])
+        J[:, 0] = np.array([dx_dq1, dy_dq1,      0, 0, 0, 1])   # derivertive by q1
+        J[:, 1] = np.array([dx_dq2, dy_dq2, dz_dq2, 0, 0, 0])   # derivertive by q2
+        J[:, 2] = np.array([dx_dq3, dy_dq3, dz_dq3, 0, 0, 0])   # derivertive by q3
+        J[:, 3] = np.array([0, 0, 0, 0, 0, 1])                  # derivertive by q4
 
         return J
         
-        
+    def getEEposition(self):
+        q1, q2, q3, q4 = self.q
+
+        l1p     = -self.manipulatorParams.d1 * math.sin(q2)               #projection of d1 on x-axis 
+        l2p     =  self.manipulatorParams.d2 * math.cos(q3)               #projection of d2 on x-axis
+        l       =  self.manipulatorParams.bx + l1p + l2p + self.manipulatorParams.mx    #total length from base to ee top projection 
+ 
+        #forward kinematics to get ee position     
+        x = l * math.cos(q1) + self.eta[0]
+        y = l * math.sin(q1) + self.eta[1]
+        z =-(self.manipulatorParams.bz + self.manipulatorParams.d1 * math.cos(-q2) + self.manipulatorParams.d2 * math.sin(q3) - self.manipulatorParams.mz) + self.eta[2]
+        yaw = q1 + q4 + self.eta[3] 
+
+        return np.array([x, y, z]).reshape(3,1)
+    
+    def update(self, jointState):
+        self.q      = jointState.SwiftProJoint.position
+        self.eta    = np.zeros((4, 1))
+
            
         

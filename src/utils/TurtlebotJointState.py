@@ -142,10 +142,10 @@ class TurtlebotJointState:
         """
         # Check if encoder data is for the left wheel
         if len(jointState.name) == 4:
-            self.SwiftProJoint.position[0] = jointState.position[0] / np.pi * 180.0
-            self.SwiftProJoint.position[1] = jointState.position[1] / np.pi * 180.0
-            self.SwiftProJoint.position[2] = jointState.position[2] / np.pi * 180.0
-            self.SwiftProJoint.position[3] = jointState.position[3] / np.pi * 180.0
+            self.SwiftProJoint.position[0] = jointState.position[0]
+            self.SwiftProJoint.position[1] = jointState.position[1]
+            self.SwiftProJoint.position[2] = jointState.position[2] 
+            self.SwiftProJoint.position[3] = jointState.position[3] 
 
             self.SwiftProJoint.velocity[0] = jointState.velocity[0]
             self.SwiftProJoint.velocity[1] = jointState.velocity[1] 
