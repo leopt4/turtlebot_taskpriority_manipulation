@@ -11,26 +11,19 @@ class Encoder:
         self.velocity   = 0.0       # Angular velocity  [rad/sec]
         self.stamp      = None      # Time stamp        [ros time]
 
-class SwiftProJoint:
-    def __init__(self, num_joint:int):
-        self.num_joint  = num_joint                                   # Number of joints
-        self.position   = [0.0 for _ in range(self.num_joint)]        # Position          [met]
-        self.velocity   = [0.0 for _ in range(self.num_joint)]        # Angular velocity
-        self.stamp      = None                                        # Time stamp        [ros time]
-
-class TurtlebotJointState:
+class OdomData:
     def __init__(self) -> None:
         """
-        Constructor of the jointStateData class.
+        Constructor of the OdomData class.
 
         :param:
         """
         self.newData    = False     # Flag presenting got new synchronized data
-
+        self.mode       = rospy.get_param('~mode')
+        
         # Init left and right encoders
         self.rightEncoder   = Encoder('turtlebot/kobuki/wheel_right_joint')
         self.leftEncoder    = Encoder('turtlebot/kobuki/wheel_left_joint')
-        self.SwiftProJoint  = SwiftProJoint(4)
 
         self.synchronized_velocity  = [0.0, 0.0]    # Synchronized angular velocity including the left and right encoders [rad/sec]
         self.synchronized_stamp     = None          # Synchronized time stamp [ros time]
@@ -39,24 +32,29 @@ class TurtlebotJointState:
 
         self.Qk         = np.diag(np.array([0.01 ** 2, 0.001 ** 2, np.deg2rad(0.1) ** 2]))  # covariance of displacement noise
 
-    def update_encoder_reading(self, jointState):
+    def update_encoder_reading(self, odom):
         """
         Parse encoder measurements
-        :param: jointState
+        :param:
         :return True: 
         """
-        # Check if encoder data is for the left wheel
-        if self.leftEncoder.tag in jointState.name:
-            self.leftEncoder.velocity   = jointState.velocity[0]
+        if self.mode == "SIL":
+            # Check if encoder data is for the left wheel
+            if self.leftEncoder.tag in odom.name:
+                self.leftEncoder.velocity   = odom.velocity[0]
+                self.leftEncoder.stamp      = rospy.Time.now() 
+            # Check if encoder data is for the right wheel
+            elif self.rightEncoder.tag in odom.name:
+                self.rightEncoder.velocity  = odom.velocity[0]
+                self.rightEncoder.stamp     = rospy.Time.now() 
+        elif self.mode == "HIL":
+            # Get encoder data for the left wheel
+            self.leftEncoder.velocity   = odom.velocity[0]
             self.leftEncoder.stamp      = rospy.Time.now() 
-            return True
-        # Check if encoder data is for the right wheel
-        elif self.rightEncoder.tag in jointState.name:
-            self.rightEncoder.velocity  = jointState.velocity[0]
+            # Get encoder data for the right wheel
+            self.rightEncoder.velocity  = odom.velocity[1]
             self.rightEncoder.stamp     = rospy.Time.now() 
-            return True
-        
-        return False
+        return True
 
     def synchronize_encoder_reading(self):
         """
@@ -103,22 +101,22 @@ class TurtlebotJointState:
         # Compute rotated angle of robot around the center point between k-1 and k
         delta_theta_k   = (-d_R + d_L) / wheelBase
 
-        # Compute xk from xk_1 and the travel distance and rotated angle. Got the equations from chapter 1.4.1: jointStateetry 
+        # Compute xk from xk_1 and the travel distance and rotated angle. Got the equations from chapter 1.4.1: Odometry 
         uk              = np.array([[d],
                                     [0],
                                     [delta_theta_k]])
         
         return uk
     
-    def read_encoder(self, jointState):
+    def read_encoder(self, odom):
         """
         Read encoder method includes updating encoder reading, synchronizing them and computing displacement
 
-        :param jointState: jointState mess 
+        :param odom: odom mess 
         :return True: if get displacement
         :return False: not enough encoder reading to compute displacement
         """
-        self.update_encoder_reading(jointState)
+        self.update_encoder_reading(odom)
 
         if self.synchronize_encoder_reading():
             self.displacement = self.compute_displacement()
@@ -133,32 +131,4 @@ class TurtlebotJointState:
         :return displacement, Qk: mean displacement vector and its covariance matrix.
         """
         return self.displacement, self.Qk
-    
-    def read_swiftpro_joint(self, jointState):
-        """
-        Parse encoder measurements
-        :param: jointState
-        :return True: 
-        """
-        # Check if encoder data is for the left wheel
-        if len(jointState.name) == 4:
-            self.SwiftProJoint.position[0] = jointState.position[0]
-            self.SwiftProJoint.position[1] = jointState.position[1]
-            self.SwiftProJoint.position[2] = jointState.position[2] 
-            self.SwiftProJoint.position[3] = jointState.position[3] 
 
-            self.SwiftProJoint.velocity[0] = jointState.velocity[0]
-            self.SwiftProJoint.velocity[1] = jointState.velocity[1] 
-            self.SwiftProJoint.velocity[2] = jointState.velocity[2] 
-            self.SwiftProJoint.velocity[3] = jointState.velocity[3]
-
-            self.SwiftProJoint.stamp     = rospy.Time.now() 
-
-            return True
-        
-        return False
-
-    def update(self, jointState):
-        self.read_encoder(jointState)
-        self.read_swiftpro_joint(jointState)
-        return True

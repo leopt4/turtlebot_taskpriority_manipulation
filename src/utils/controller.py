@@ -22,6 +22,10 @@ class Controller():
             Jbar    = self.tasks[i].J @ P 
             # Compute task velocity
             # Accumulate velocity
+            a = self.tasks[i].K
+            b = self.tasks[i].err
+            c = DLS(Jbar, 0.2)
+            d = self.tasks[i].J
             dq      = dq + DLS(Jbar, 0.2) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
             # Update null-space projector
             P       = P - DLS(Jbar, 0.001) @ Jbar  

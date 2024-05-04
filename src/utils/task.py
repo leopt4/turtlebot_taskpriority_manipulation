@@ -163,58 +163,21 @@ class EEPosition3D(Task):
         self.err_hist.append(np.linalg.norm(self.getError()))
 
 
-class Position3D(Task):
-    def __init__(self, name, desired, feedforward, gain, link):
-        super().__init__(name, desired, feedforward, gain)
-        self.J = np.zeros((desired.shape[0], 4))
-        self.err = np.zeros(desired.shape)
-        self.link = link
-        self.FeedForward = feedforward
-        self.K = gain
-
-    def update(self, robot):
-        self.J = robot.getLinkJacobian(self.link)[0:3, :]
-        self.err = (
-            self.K
-            @ (
-                self.getDesired()
-                - robot.getLinkTransform(self.link)[0:3, 3].reshape(
-                    self.getDesired().shape
-                )
-            )
-        ) + self.getFeedForward().reshape(self.getDesired().shape)
-
-        # Uncomment Following to change desired to a random position
-        # if np.linalg.norm(self.err) < 0.05:
-        #     self.setDesired(np.random.uniform(-1.5, 1.5, size=(2, 1)))
-        # pass
-
-    def track_err(self):
-        self.err_hist.append(np.linalg.norm(self.getError()))
 
 
-"""
-    Subclass of Task, representing the 2D orientation task.
-"""
-
-
-class Orientation3D(Task):
-    def __init__(self, name, desired, feedforward, gain, link):
+class EEOrientation3D(Task):
+    def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
         self.J = np.zeros((1, 2))  # Initialize with proper dimensions
         self.err = np.zeros((1, 1))  # Initialize with proper dimensions
-        self.link = link
+        # self.link = link
         self.FeedForward = feedforward
         self.K = gain
 
     def update(self, robot):
-        self.J = robot.getLinkJacobian(self.link)[3:, :]  # Update task Jacobian
-        r = R.from_matrix(robot.getLinkTransform(self.link)[0:3, 0:3])
-        euler = (r.as_euler("xyz")).reshape(self.getDesired().shape[0], 1)
-        self.err = self.K @ (self.getDesired() - euler) + self.getFeedForward().reshape(
-            self.getDesired().shape[0], 1
-        )
-        pass  # to remove
+        self.J = (robot.getEEJacobian()[-1, :]).reshape((1,6))  # Update task Jacobian
+        self.err = self.K @ (self.getDesired() - robot.getEEorientation()) + self.getFeedForward().reshape(self.getDesired().shape[0], 1)
+       
 
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))

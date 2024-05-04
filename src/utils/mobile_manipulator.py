@@ -4,13 +4,16 @@ import numpy as np
 
 class ManipulatorParams:
     def __init__(self) -> None:
-        self.dof = 4       
+        self.dof = 4      
         self.bx = 0.0132        # [met]
         self.bz = 0.108         # [met]
         self.d1 = 0.142         # [met]
         self.d2 = 0.1588        # [met]
         self.mz = 0.0722        # [met]
         self.mx = 0.0565        # [met]
+
+        self.bmx = 0.0507       # [met]
+        self.bmz = -0.198       # [met]
 class MobileManipulator:
     '''
         Constructor.
@@ -28,9 +31,9 @@ class MobileManipulator:
         self.manipulatorParams = ManipulatorParams()
 
         # List of joint types extended with base joints
-        self.revoluteExt = [True, False] + self.revolute
+        self.revoluteBase = [True, False]
 
-        self.dof = 4 #len(self.revoluteExt)  # Number of DOF of the system
+        self.dof = self.manipulatorParams.dof + 2
 
         # Vector of joint positions (manipulator)
         self.q = np.zeros((len(self.revolute), 1))
@@ -214,14 +217,19 @@ class MobileManipulator:
         Method that returns the end-effector Jacobian.
     '''
     def getEEJacobian(self): 
-        J = np.zeros((6, self.manipulatorParams.dof))
+        J = np.zeros((6, self.dof))
         q1, q2, q3, q4  = self.q
     
         l1p     = -self.manipulatorParams.d1 * math.sin(q2)               #projection of d1 on x-axis 
         l2p     =  self.manipulatorParams.d2 * math.cos(q3)               #projection of d2 on x-axis
         l       =  self.manipulatorParams.bx + l1p + l2p + self.manipulatorParams.mx    #total length from base to ee top projection 
 
-        # dx_db1  = 
+        dx_db2  =  l * math.cos(q1) * math.cos(self.eta[3]) - (l * math.sin(q1) + self.manipulatorParams.bmx) * math.sin(self.eta[3])
+        dy_db2  =  l * math.cos(q1) * math.sin(self.eta[3]) - (l * math.sin(q1) + self.manipulatorParams.bmx) * math.cos(self.eta[3])
+  
+        dx_db1  =  math.cos(self.eta[3])
+        dy_db1  =  math.sin(self.eta[3])
+
         dx_dq1  = -l * math.sin(q1) * math.cos(self.eta[3]) - l * math.cos(q1) * math.sin(self.eta[3]) 
         dy_dq1  = -l * math.sin(q1) * math.sin(self.eta[3]) + l * math.cos(q1) * math.cos(self.eta[3])
         
@@ -235,11 +243,12 @@ class MobileManipulator:
         dy_dq3  = -self.manipulatorParams.d2 * math.sin(q3) * (math.cos(q1) * math.cos(self.eta[3]) - math.sin(q1) * math.sin(self.eta[3])) 
         dz_dq3  = -self.manipulatorParams.d2 * math.cos(q3)
 
-        # J[:, 0] = np.array([])
-        J[:, 0] = np.array([dx_dq1, dy_dq1,      0, 0, 0, 1])   # derivertive by q1
-        J[:, 1] = np.array([dx_dq2, dy_dq2, dz_dq2, 0, 0, 0])   # derivertive by q2
-        J[:, 2] = np.array([dx_dq3, dy_dq3, dz_dq3, 0, 0, 0])   # derivertive by q3
-        J[:, 3] = np.array([0, 0, 0, 0, 0, 1])                  # derivertive by q4
+        J[:, 0] = np.array([dx_db1, dy_db1,      0, 0, 0, 0])
+        J[:, 1] = np.array([dx_db2, dy_db2,      0, 0, 0, 1])
+        J[:, 2] = np.array([dx_dq1, dy_dq1,      0, 0, 0, 1])   # derivertive by q1
+        J[:, 3] = np.array([dx_dq2, dy_dq2, dz_dq2, 0, 0, 0])   # derivertive by q2
+        J[:, 4] = np.array([dx_dq3, dy_dq3, dz_dq3, 0, 0, 0])   # derivertive by q3
+        J[:, 5] = np.array([     0,      0,      0, 0, 0, 1])   # derivertive by q4
 
         return J
         
@@ -251,16 +260,29 @@ class MobileManipulator:
         l       =  self.manipulatorParams.bx + l1p + l2p + self.manipulatorParams.mx    #total length from base to ee top projection 
  
         #forward kinematics to get ee position     
-        x = l * math.cos(q1) + self.eta[0]
-        y = l * math.sin(q1) + self.eta[1]
-        z =-(self.manipulatorParams.bz + self.manipulatorParams.d1 * math.cos(-q2) + self.manipulatorParams.d2 * math.sin(q3) - self.manipulatorParams.mz) + self.eta[2]
-        yaw = q1 + q4 + self.eta[3] 
+        x = l * math.sin(q1+self.eta[3]) + self.eta[0] + self.manipulatorParams.bmx * math.cos(self.eta[3])
+        y = -l * math.cos(q1+self.eta[3]) + self.eta[1] + self.manipulatorParams.bmx * math.sin(self.eta[3])
+        z =-(self.manipulatorParams.bz + self.manipulatorParams.d1 * math.cos(-q2) + self.manipulatorParams.d2 * math.sin(q3) - self.manipulatorParams.mz) + self.eta[2] + self.manipulatorParams.bmz
 
         return np.array([x, y, z]).reshape(3,1)
     
-    def update(self, jointState):
-        self.q      = jointState.SwiftProJoint.position
-        self.eta    = np.zeros((4, 1))
+    def getEEorientation(self):
+        q1, q2, q3, q4 = self.q
+ 
+        # forward kinematics to get ee orietation``     
+        yaw_wtee = q1 + q4 + self.eta[3] - np.pi/2.0
+
+        return np.array([yaw_wtee]).reshape(1,1)
+    
+    def updateManipulatorState(self, swiftProJoint):
+        self.q[0]      = swiftProJoint[0]
+        self.q[1]      = swiftProJoint[1]
+        self.q[2]      = swiftProJoint[2]
+        self.q[3]      = swiftProJoint[3]
+    
+    def updateMobileBaseState(self, eta):
+        self.eta    = eta
+
 
            
         

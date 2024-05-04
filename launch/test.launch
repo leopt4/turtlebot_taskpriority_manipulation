@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="turtlebot_taskpriority_manipulation" type="TP_control_node.py" name="TP_control_node">
+    </node>
+    
+</launch>
