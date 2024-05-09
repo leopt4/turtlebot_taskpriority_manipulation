@@ -27,7 +27,7 @@ class Controller():
             b = self.tasks[i].err
             c = weighted_DLS(Jbar, 0.1, self.weight_matrix)
             d = self.tasks[i].J
-            dq      = dq + weighted_DLS(Jbar, 0.1, self.weight_matrix) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
+            dq      = dq + weighted_DLS(Jbar, 0.01, self.weight_matrix) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
             # Update null-space projector
             P       = P - DLS(Jbar, 0.001) @ Jbar  
 

@@ -29,9 +29,10 @@ class Task:
         self.FeedForward    = feedforward           # Feed forward velocity
         self.K              = gain                  # Gain feed forward controller      
         self.err_hist = []
-        self.activation = 1
 
         self.err    = np.zeros((self.task_dim, 1))              # Initialize with proper dimensions
+
+        self.active = 1                             # Activation function
 
     def update(self, robot):
         """
@@ -127,25 +128,17 @@ class Task:
         Returns:
             int: Activation status (1 for active, 0 for inactive).
         """
-        return self.activation
+        return self.active
 
-    def updateActivation(self, robot):
-        """
-        Abstract method for updating the activation status of the task.
 
-        Args:
-            robot (Manipulator): Reference to the manipulator object.
-        """
-        pass  # Overridden in child class
-
-    def setActivation(self, value):
+    def setActive(self, value):
         """
         Sets the activation status of the task.
 
         Args:
             value: Activation status (1 for active, 0 for inactive).
         """
-        self.activation = value
+        self.active = value
 
 """
     Subclass of Task, representing the 3D Position of the End Effector task.
@@ -232,7 +225,7 @@ class MMOrientation(Task):
 """
     Subclass of Task, representing the position of the mobile base task.
 """
-class MMposition(Task):
+class MMPosition(Task):
     def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
 
@@ -247,7 +240,38 @@ class MMposition(Task):
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))
 
+'''
+    Subclass of Task, representing joint limits (inequality task).
+'''
+class Limit2D(Task):
+  
+    def __init__(self, name, limit_range, threshold, feedforward, gain, link_index:int):
+        super().__init__(name, limit_range, feedforward, gain)
+        self.threshold  = threshold         # Threshold [alpha, sigma].reshape(2,1)
+        self.active     = 0                 # Initialise activation function is 0
+        self.link_index = link_index+2
 
+    def update(self, robot):
+        DoF = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J  = np.zeros((1,DoF))
+        self.J[0,self.link_index-1] = 1
+        # Update task error
+        q_i = robot.getJointPos(self.link_index)
+        
+        self.err = np.array([1.0]).reshape(1,1)
+        # Compute activation function
+        if self.active == 0 and q_i >= self.getDesired()[0,1] - self.threshold[0]:
+            self.active = -1
+        elif self.active == 0 and q_i <= self.getDesired()[0,0] + self.threshold[0]:
+            self.active = 1
+        elif self.active == -1 and q_i <= self.getDesired()[0,1] - self.threshold[1]:
+            self.active = 0
+        elif self.active == 1 and q_i >= self.getDesired()[0,0] + self.threshold[1]:
+            self.active = 0
+
+        return True
+    
 """ 
     Subclass of Task, representing the joint limit task.
 """
@@ -267,13 +291,12 @@ class JointLimits(Task):
         self.lower_limits = lower_limits
         self.upper_limits = upper_limits
         self.J = np.zeros((len(desired), 4))
-        self.err = np.zeros(len(desired))
         self.setActivation(np.zeros((6, 1)))
-        self.activation_thresh = activation_thresh
-        self.deactivation_thresh = deactivation_thresh
+        self.activation_thresh      = activation_thresh
+        self.deactivation_thresh    = deactivation_thresh
 
     def update(self, robot):
-        # # Check if the current joint positions are within the limits
+        # Check if the current joint positions are within the limits
         self.updateActivation(robot)
         # Update the Jacobian and error based on the adjusted desired joint positions
         self.J = np.eye(robot.getDOF())

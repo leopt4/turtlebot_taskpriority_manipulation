@@ -16,16 +16,25 @@ class TP_controller:
         rospy.init_node("TP_control_node")
         rospy.loginfo("Starting Task Priority Controller....")
         
+        # Task hierarchy definition
+        limit_range_joint1   = np.array([-np.pi/2.0, np.pi/2.0]).reshape(1,2)
+        threshold_joint1     = np.array([0.1, 0.2]).reshape(2,1)
+
         self.tasks = [ 
-            # EEPosition3D("End-effector position", np.array([-0.2, 0.15, -0.3]).reshape(3,1), np.zeros((3,1)), 0.7*np.eye(3,3))
-            EEPosition3D("End-effector position", np.array([0.4, 0.4, -0.3]).reshape(3,1), np.zeros((3,1)), 0.5*np.eye(3,3))
+            # Limit2D("Manipulator Joint 1 Limitation", limit_range_joint1, threshold_joint1, np.zeros((1,1)), 0.1*np.eye(1,1), 1),
+            # Limit2D("Manipulator Joint 2 Limitation", limit_range, threshold),
+            # Limit2D("Manipulator Joint 3 Limitation", limit_range, threshold),
+            # Limit2D("Manipulator Joint 4 Limitation", limit_range, threshold),
+            # EEPosition3D("End-effector position", np.array([1.0, -0.2, -0.3]).reshape(3,1), np.zeros((3,1)), 0.4*np.eye(3,3))
+            # EEPosition3D("End-effector position", np.array([0.4, 0.4, -0.3]).reshape(3,1), np.zeros((3,1)), 0.5*np.eye(3,3))
             # EEOrientation3D("End-effector orientation", np.array([1.7]).reshape(1,1), np.zeros((1,1)), 0.5*np.eye(1,1))
             # MMOrientation("Mobile Base orientation", np.array([1.7]).reshape(1,1), np.zeros((1,1)), 1.0*np.eye(1,1))
+            MMPosition("Mobile base position", np.array([2.0, -0.2]).reshape(2,1), np.zeros((2,1)), 0.4*np.eye(2,2))
         ] 
 
         self.robot              = MobileManipulator()
         # self.taskhandler        = taskHandler(self.robot)
-        weight_matrix           = np.diag([1.0, 1.0, 1.0, 2.0, 2.0, 1.0])
+        weight_matrix           = np.diag([0.5, 1.0, 0.1, 1.0, 1.0, 1.0])
         self.controller         = Controller(self.tasks, self.robot, weight_matrix)
         
         self.swiftpro_joint_state_sub   = rospy.Subscriber(joint_state_topic, JointState, self.swiftProJointCB)
@@ -97,12 +106,12 @@ class TP_controller:
         
         manipulator_msg.data        = dq[2:6]
 
-        err_msg.data  = ((self.tasks[0].err).reshape((3,1))).tolist()[0]
+        err_msg.data  = ((self.tasks[0].err).reshape((2,1))).tolist()[0]
 
 
         # Publish the message
         self.cmd_pub.publish(mobileBase_msg)
-        self.dq_pub.publish(manipulator_msg)
+        # self.dq_pub.publish(manipulator_msg)
 
 
         self.err_pub.publish(err_msg)
@@ -115,9 +124,11 @@ class TP_controller:
         self.publish_EEpoint(((EEpositionPoint).flatten()).tolist())
 
         # Define the translation and rotation for the inverse TF (base_footprint to world)
-        translation = (-EEpositionPoint[0]*math.cos(EEorietation) + EEpositionPoint[1]*math.sin(EEorietation), -EEpositionPoint[0]*math.sin(EEorietation) - EEpositionPoint[1]*math.cos(EEorietation), -EEpositionPoint[2]) # Set the x, y, z coordinates
+        translation = (-(EEpositionPoint[0]*math.cos(EEorietation) + EEpositionPoint[1]*math.sin(EEorietation)), 
+                       -(-EEpositionPoint[0]*math.sin(EEorietation) + EEpositionPoint[1]*math.cos(EEorietation)), 
+                       -EEpositionPoint[2]) # Set the x, y, z coordinates
 
-        quaternion = tf.transformations.quaternion_from_euler(0, 0, EEorietation)  # Convert euler angles to quaternion
+        quaternion = tf.transformations.quaternion_from_euler(0, 0, -EEorietation)  # Convert euler angles to quaternion
         rotation = (quaternion[0], quaternion[1], quaternion[2], quaternion[3])
         
         # Publish the inverse TF from world to base_footprint
@@ -141,7 +152,7 @@ class TP_controller:
             m.action = Marker.ADD
             m.pose.position.x = p[0]
             m.pose.position.y = p[1]
-            m.pose.position.z = p[2]
+            m.pose.position.z = 0.0#p[2]
             m.pose.orientation.x = 0
             m.pose.orientation.y = 0
             m.pose.orientation.z = 0

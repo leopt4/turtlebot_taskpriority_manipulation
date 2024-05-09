@@ -16,7 +16,7 @@ class ManipulatorParams:
         self.bmx = 0.0507       # [met]
         self.bmz = -0.198       # [met]
         
-        self.alpha = np.pi/2.0
+        self.alpha = -np.pi/2.0
 class MobileManipulator:
     '''
         Constructor.
@@ -186,15 +186,6 @@ class MobileManipulator:
     def getMMDOF(self):
         return self.mm_dof
 
-    ###
-    def getLinkJacobian(self, link):
-        return jacobianLink(self.T, self.revoluteExt, link)
-
-    def getLinkTransform(self, Link):
-        if Link > self.getDOF():
-            return self.T[-1]
-        else:
-            return self.T[Link]
     
     def track_q(self):
         # self.q_hist.append(((np.rad2deg(self.q))% 360 + 360) % 360)
@@ -239,6 +230,8 @@ class MobileManipulator:
 
         J[:, 0] = np.array([dx_db1, dy_db1,      0, 0, 0, 0])   # derivertive by m1
         J[:, 1] = np.array([dx_db2, dy_db2,      0, 0, 0, 1])   # derivertive by m2
+        # J[:, 0] = np.array([0, 0,      0, 0, 0, 0])   # derivertive by m1
+        # J[:, 1] = np.array([0, 0,      0, 0, 0, 0])   # derivertive by m2
         # J[:, 2] = np.array([0, 0,      0, 0, 0, 0])   # derivertive by m1
         # J[:, 3] = np.array([0, 0,      0, 0, 0, 0])   # derivertive by m2
         # J[:, 4] = np.array([0, 0,      0, 0, 0, 0])   # derivertive by m2
@@ -293,7 +286,7 @@ class MobileManipulator:
         q1, q2, q3, q4 = self.q
  
         # forward kinematics to get ee orietation``     
-        yaw_wtee = q1 + q4 + self.eta[3] - np.pi/2.0
+        yaw_wtee = q1 + q4 + self.eta[3] + self.manipulatorParams.alpha
 
         return np.array([yaw_wtee]).reshape(1,1)
     

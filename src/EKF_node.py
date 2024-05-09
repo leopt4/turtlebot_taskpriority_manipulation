@@ -84,8 +84,9 @@ class EKF:
     def get_odom(self, odom):
         timestamp        = odom.header.stamp
         # Read encoder
-        if len(odom.name) == 2 and self.odom.read_encoder(odom, timestamp) and self.ekf_filter is not None:
-            self.ekf_filter.gotNewEncoderData()
+        if (len(odom.name) == 2 and self.mode == "HIL") or self.mode == "SIL":
+            if self.odom.read_encoder(odom, timestamp) and self.ekf_filter is not None:
+                self.ekf_filter.gotNewEncoderData()
 
         if self.ekf_filter is not None:
             # Run EKF Filter
