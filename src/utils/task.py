@@ -192,7 +192,7 @@ class EEConfiguration3D(Task):
         # Update task error
         self.err_pos = (self.getDesired()[0:3, 0]).reshape(3, 1) - robot.getEEposition()
 
-        self.err_ori = self.getDesired()[-1] - robot.getEEorientation()
+        self.err_ori = normalize_angle(self.getDesired()[-1] - robot.getEEorientation())
         
         self.err = self.K @ (
             np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
@@ -209,13 +209,13 @@ class EEConfiguration3D(Task):
 class MMOrientation(Task):
     def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
-
+        
     def update(self, robot):
         DoF     = robot.getDOF()
         # Update Jacobean matrix - task Jacobian
         self.J  = (robot.getMMJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
         # Update task error
-        self.err = self.K @ (self.getDesired() - robot.getMMorientation()) + self.getFeedForward().reshape(self.task_dim, 1)
+        self.err = self.K @ (normalize_angle(self.getDesired() - robot.getMMorientation())) + self.getFeedForward().reshape(self.task_dim, 1)
        
 
     def track_err(self):
@@ -249,13 +249,13 @@ class Limit2D(Task):
         super().__init__(name, limit_range, feedforward, gain)
         self.threshold  = threshold         # Threshold [alpha, sigma].reshape(2,1)
         self.active     = 0                 # Initialise activation function is 0
-        self.link_index = link_index+2
+        self.link_index = link_index
 
     def update(self, robot):
         DoF = robot.getDOF()
         # Update Jacobean matrix - task Jacobian
         self.J  = np.zeros((1,DoF))
-        self.J[0,self.link_index-1] = 1
+        self.J[0,self.link_index+1] = 1
         # Update task error
         q_i = robot.getJointPos(self.link_index)
         
@@ -271,133 +271,3 @@ class Limit2D(Task):
             self.active = 0
 
         return True
-    
-""" 
-    Subclass of Task, representing the joint limit task.
-"""
-class JointLimits(Task):
-    def __init__(
-        self,
-        name,
-        desired,
-        lower_limits,
-        upper_limits,
-        activation_thresh,
-        deactivation_thresh,
-        feedforward,
-        gain,
-    ):
-        super().__init__(name, desired, feedforward, gain)
-        self.lower_limits = lower_limits
-        self.upper_limits = upper_limits
-        self.J = np.zeros((len(desired), 4))
-        self.setActivation(np.zeros((6, 1)))
-        self.activation_thresh      = activation_thresh
-        self.deactivation_thresh    = deactivation_thresh
-
-    def update(self, robot):
-        # Check if the current joint positions are within the limits
-        self.updateActivation(robot)
-        # Update the Jacobian and error based on the adjusted desired joint positions
-        self.J = np.eye(robot.getDOF())
-        self.err = self.getGain()
-
-    def track_err(self):
-        self.err_hist.append(np.linalg.norm(self.getError()))
-
-    def updateActivation(self, robot):
-        for i in range(robot.getDOF() - 2):
-            if (
-                robot.getJointPos(i + 1)
-                >= (self.upper_limits[i] - self.activation_thresh)
-            ) and (self.activation[i + 2] == 0):
-                self.activation[i + 2] = -1
-
-            elif (self.activation[i + 2] == 0) and (
-                robot.getJointPos(i + 1)
-                <= (self.lower_limits[i] + self.activation_thresh)
-            ):
-                self.activation[i + 2] = 1
-            elif (self.activation[i + 2] == -1) and (
-                robot.getJointPos(i + 1)
-                <= (self.upper_limits[i] - self.deactivation_thresh)
-            ):
-                self.activation[i + 2] = 0
-            elif (self.activation[i + 2] == 1) and (
-                robot.getJointPos(i + 1)
-                >= (self.lower_limits[i] + self.deactivation_thresh)
-            ):
-                self.activation[i + 2] = 0
-
-    def isActive(self):
-        # return 1 if there is  1 in activation array 0 if all zeros
-        if (self.activation == 0).all():
-            return 0
-        else:
-            return 1
-
-
-class Obstacle3D(Task):
-    def __init__(
-        self,
-        name,
-        desired,
-        obstacle,
-        activation_thresh,
-        deactivation_thresh,
-        feedforward,
-        gain,
-    ):
-        super().__init__(name, desired, feedforward, gain)
-        self.obstacle = obstacle  # List of obstacle points
-        self.J = np.zeros((3, 4))  # Initialize Jacobian
-        self.err = np.zeros(3)  # Initialize error
-        self.activation_thresh = activation_thresh
-        self.deactivation_thresh = deactivation_thresh
-        self.dist_to_obstacle = 0.0
-        self.setActivation(False)
-
-    def update(self, robot):
-        # Calculate the error as the distance to the obstacle
-        self.err = (
-            robot.getEETransform()[0:2, 3].reshape(2, 1) - self.obstacle.reshape(2, 1)
-        ) / (
-            np.linalg.norm(
-                self.obstacle.reshape(2, 1)
-                - robot.getEETransform()[0:2, 3].reshape(2, 1)
-            )
-        )
-        self.err = np.block([[self.err], [0.0]]).reshape(3, 1)
-        self.J = robot.getEEJacobian()[0:3, :].reshape(3, robot.getDOF())
-
-    def track_err(self):
-        pass
-
-    def updateActivation(self, robot):
-        if (not self.isActive()) and (
-            (
-                np.linalg.norm(
-                    self.obstacle.reshape(2, 1)
-                    - robot.getEETransform()[0:2, 3].reshape(2, 1)
-                )
-            )
-            <= self.activation_thresh
-        ):
-            self.setActivation(True)
-        elif (self.isActive()) and (
-            (
-                np.linalg.norm(
-                    self.obstacle.reshape(2, 1)
-                    - robot.getEETransform()[0:2, 3].reshape(2, 1)
-                )
-            )
-            >= self.deactivation_thresh
-        ):
-            self.setActivation(False)
-
-        self.err_hist.append(
-            np.linalg.norm(
-                self.obstacle.reshape(2, 1)
-                - robot.getEETransform()[0:2, 3].reshape(2, 1)
-            )
-        )

@@ -17,18 +17,18 @@ class Controller():
         for i in range(len(self.tasks)):      
             # Update task state
             self.tasks[i].update(self.robot)
-
-            # Compute augmented Jacobian
-            a = self.tasks[i].J
-            Jbar    = self.tasks[i].J @ P 
-            # Compute task velocity
-            # Accumulate velocity
-            a = self.tasks[i].K
-            b = self.tasks[i].err
-            c = weighted_DLS(Jbar, 0.1, self.weight_matrix)
-            d = self.tasks[i].J
-            dq      = dq + weighted_DLS(Jbar, 0.01, self.weight_matrix) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
-            # Update null-space projector
-            P       = P - DLS(Jbar, 0.001) @ Jbar  
-
+            if self.tasks[i].isActive() != 0:
+                # Compute augmented Jacobian
+                Jbar    = self.tasks[i].J @ P 
+                # Compute task velocity
+                # Accumulate velocity
+                dq      = dq + weighted_DLS(Jbar, 0.01, self.weight_matrix) @ (self.tasks[i].isActive() * self.tasks[i].err - self.tasks[i].J @ dq) 
+                # Update null-space projector
+                P       = P - weighted_DLS(Jbar, 0.0001, self.weight_matrix) @ Jbar  
+            else:
+                dq      = dq
+                P       = P 
         return dq
+    
+    def set_weightMatrix(self, value):
+        self.weight_matrix = value
