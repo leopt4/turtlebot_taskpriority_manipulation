@@ -1,8 +1,4 @@
-joint_lower_limits: [0.314159265, 0.314159265,0.314159265,0.314159265]
-joint_upper_limits: []
-
-weight_matric: []
-
+# Params
 tracking : False
 
 velocity_scaling: False
@@ -10,3 +6,31 @@ dq_max_vel: [2.0, 2.1, 2.3, 2.5]
 
 timer_thresh: 0.1
 
+frame_map : map
+frame_base : turtlebot/kobuki/base_footprint
+
+joint_state_topic : /turtlebot/joint_states
+task_topic : None
+cmd_vel_topic : /cmd_vel
+cmd_dq_topic : /turtlebot/swiftpro/joint_velocity_controller/command
+
+limit_joint1_upper :  1.571
+limit_joint1_lower : -1.571
+limit_joint2_upper :  0.050
+limit_joint2_lower : -1.571
+limit_joint3_upper :  0.050
+limit_joint3_lower : -1.571
+limit_joint4_upper :  1.571
+limit_joint4_lower : -1.571
+
+limit_joint_threshold_activate : 0.05
+limit_joint_threshold_deactivate : 0.10
+
+weight_base_rotate : 1.000
+weight_base_translate : 1.000
+weight_joint1 : 1.000
+weight_joint2 : 1.000
+weight_joint3 : 1.000
+weight_joint4 : 1.000
+
+#
