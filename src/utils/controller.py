@@ -1,8 +1,9 @@
 from .common import *
 class Controller():
-    def __init__(self, tasks, robot):
-        self.tasks      = tasks
-        self.robot      = robot
+    def __init__(self, tasks, robot, weight_matrix):
+        self.tasks          = tasks
+        self.robot          = robot
+        self.weight_matrix  = weight_matrix
 
 
     def compute(self):
@@ -24,9 +25,9 @@ class Controller():
             # Accumulate velocity
             a = self.tasks[i].K
             b = self.tasks[i].err
-            c = DLS(Jbar, 0.2)
+            c = weighted_DLS(Jbar, 0.1, self.weight_matrix)
             d = self.tasks[i].J
-            dq      = dq + DLS(Jbar, 0.2) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
+            dq      = dq + weighted_DLS(Jbar, 0.1, self.weight_matrix) @ (self.tasks[i].K @ self.tasks[i].err - self.tasks[i].J @ dq) 
             # Update null-space projector
             P       = P - DLS(Jbar, 0.001) @ Jbar  
 

@@ -17,13 +17,16 @@ class TP_controller:
         rospy.loginfo("Starting Task Priority Controller....")
         
         self.tasks = [ 
-            EEPosition3D("End-effector position", np.array([1.2, 0.5, -0.3]).reshape(3,1), np.zeros((3,1)), 0.6*np.eye(3,3)),
-            EEOrientation3D("End-effector orientation", np.array([1.7]).reshape(1,1), np.zeros((1,1)), 0.5*np.eye(1,1))
+            # EEPosition3D("End-effector position", np.array([-0.2, 0.15, -0.3]).reshape(3,1), np.zeros((3,1)), 0.7*np.eye(3,3))
+            EEPosition3D("End-effector position", np.array([0.4, 0.4, -0.3]).reshape(3,1), np.zeros((3,1)), 0.5*np.eye(3,3))
+            # EEOrientation3D("End-effector orientation", np.array([1.7]).reshape(1,1), np.zeros((1,1)), 0.5*np.eye(1,1))
+            # MMOrientation("Mobile Base orientation", np.array([1.7]).reshape(1,1), np.zeros((1,1)), 1.0*np.eye(1,1))
         ] 
 
         self.robot              = MobileManipulator()
         # self.taskhandler        = taskHandler(self.robot)
-        self.controller         = Controller(self.tasks, self.robot)
+        weight_matrix           = np.diag([1.0, 1.0, 1.0, 2.0, 2.0, 1.0])
+        self.controller         = Controller(self.tasks, self.robot, weight_matrix)
         
         self.swiftpro_joint_state_sub   = rospy.Subscriber(joint_state_topic, JointState, self.swiftProJointCB)
         
@@ -34,13 +37,6 @@ class TP_controller:
         # self.listener.waitForTransform("map", "turtlebot/kobuki/base_footprint", rospy.Time(), rospy.Duration(0.2))
 
         # PUBLISHERS
-        # Timer for TP controller (Velocity Commands)
-        rospy.Timer(rospy.Duration(1.0 / 10), self.controllerCallback)
-
-        # Timer for TP controller (Velocity Commands)
-        # rospy.Timer(rospy.Duration(10), self.randomTasksCallback)
-        rospy.Timer(rospy.Duration(01.0), self.mobileBaseJointCB)
-
         # Error Publisher
         # self.err_pub = rospy.Publisher("/task_error", type, queue_size=1)
         self.point_marker_pub   = rospy.Publisher('~desierd_point_marker', Marker, queue_size=1)
@@ -49,8 +45,16 @@ class TP_controller:
         # Command Velocity Publishers
         self.cmd_pub = rospy.Publisher(cmd_vel_topic, Twist, queue_size=10)
         self.dq_pub = rospy.Publisher(cmd_dq_topic, Float64MultiArray, queue_size=10)
+
         self.err_pub = rospy.Publisher("/error_topic", Float64MultiArray, queue_size=10)
         
+        # Timer for TP controller (Velocity Commands)
+        rospy.Timer(rospy.Duration(1.0 / 10), self.controllerCallback)
+
+        # Timer for TP controller (Velocity Commands)
+        # rospy.Timer(rospy.Duration(10), self.randomTasksCallback)
+        rospy.Timer(rospy.Duration(01.0), self.mobileBaseJointCB)
+
     def mobileBaseJointCB(self, event):
         # Wait for the TFs to become available  
         (translation, rotation) = self.listener.lookupTransform("map", "turtlebot/kobuki/base_footprint", rospy.Time())
@@ -82,16 +86,24 @@ class TP_controller:
         manipulator_msg     = Float64MultiArray()
         mobileBase_msg      = Twist()
         err_msg             = Float64MultiArray()
+
         # Fill the message with data
         mobileBase_msg.angular.z    = dq[1]
+        # if mobileBase_msg.angular.z > 0.5:
+        #     mobileBase_msg.linear.x     = 0.0
+        # else:
+        #     mobileBase_msg.angular.z    = 0.0
         mobileBase_msg.linear.x     = dq[0]
+        
         manipulator_msg.data        = dq[2:6]
 
-        err_msg.data  = ((self.tasks[0].err).reshape((1,3))).tolist()[0]
+        err_msg.data  = ((self.tasks[0].err).reshape((3,1))).tolist()[0]
+
 
         # Publish the message
         self.cmd_pub.publish(mobileBase_msg)
         self.dq_pub.publish(manipulator_msg)
+
 
         self.err_pub.publish(err_msg)
 
@@ -185,5 +197,9 @@ class TP_controller:
         
 
 if __name__ == "__main__":
+
+    # ros_node = TP_controller("/turtlebot/joint_states", "abc","/cmd_vel", "/turtlebot/swiftpro/joint_velocity_controller/command")
     ros_node = TP_controller("/turtlebot/joint_states", "abc","/cmd_vel", "/turtlebot/swiftpro/joint_velocity_controller/command")
+
+    
     rospy.spin()

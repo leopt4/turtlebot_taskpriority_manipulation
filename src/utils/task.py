@@ -23,12 +23,15 @@ class Task:
             feedforward: Feedforward component for the task.
             gain: Gain for the task.
         """
-        self.name = name
-        self.sigma_d = desired
-        self.FeedForward = feedforward
-        self.K = gain
+        self.name           = name                  # task title
+        self.sigma_d        = desired               # desired sigma
+        self.task_dim       = np.shape(desired)[0]  # Get task dimension
+        self.FeedForward    = feedforward           # Feed forward velocity
+        self.K              = gain                  # Gain feed forward controller      
         self.err_hist = []
         self.activation = 1
+
+        self.err    = np.zeros((self.task_dim, 1))              # Initialize with proper dimensions
 
     def update(self, robot):
         """
@@ -144,39 +147,82 @@ class Task:
         """
         self.activation = value
 
-
+"""
+    Subclass of Task, representing the 3D Position of the End Effector task.
+"""
 class EEPosition3D(Task):
     def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
-        self.J = np.zeros((desired.shape[0], 4))
-        self.err = np.zeros(desired.shape)
-        # self.link = link
-        self.FeedForward = feedforward
-        self.K = gain
+        self.J = np.zeros((self.task_dim, 6))
 
     def update(self, robot):
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
         self.J = robot.getEEJacobian()[0:3, :]
-        self.err = self.K @ (self.getDesired() - robot.getEEposition()) + self.getFeedForward().reshape(self.getDesired().shape)
+        # Update task error
+        self.err = self.K @ (self.getDesired() - robot.getEEposition()) + self.getFeedForward().reshape(self.task_dim, 1)
 
 
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))
 
-
-
-
+"""
+    Subclass of Task, representing the 3D Orientation of the End Effector task.
+"""
 class EEOrientation3D(Task):
     def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
-        self.J = np.zeros((1, 2))  # Initialize with proper dimensions
-        self.err = np.zeros((1, 1))  # Initialize with proper dimensions
-        # self.link = link
-        self.FeedForward = feedforward
-        self.K = gain
 
     def update(self, robot):
-        self.J = (robot.getEEJacobian()[-1, :]).reshape((1,6))  # Update task Jacobian
-        self.err = self.K @ (self.getDesired() - robot.getEEorientation()) + self.getFeedForward().reshape(self.getDesired().shape[0], 1)
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J  = (robot.getEEJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
+        # Update task error
+        self.err = self.K @ (self.getDesired() - robot.getEEorientation()) + self.getFeedForward().reshape(self.task_dim, 1)
+       
+
+    def track_err(self):
+        self.err_hist.append(np.linalg.norm(self.getError()))
+
+"""
+    Subclass of Task, representing the 2D configuration task.
+"""
+class EEConfiguration3D(Task):
+    def __init__(self, name, desired, feedforward, gain):
+        super().__init__(name, desired, feedforward, gain)
+
+    def update(self, robot):
+        DoF = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J = (robot.getEEJacobian()[[0,1,2,5]]).reshape((self.task_dim, DoF))
+
+        # Update task error
+        self.err_pos = (self.getDesired()[0:3, 0]).reshape(3, 1) - robot.getEEposition()
+
+        self.err_ori = self.getDesired()[-1] - robot.getEEorientation()
+        
+        self.err = self.K @ (
+            np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
+        ) + self.getFeedForward().reshape(self.task_dim, 1)
+
+    def track_err(self):
+        self.err_hist.append(
+            (np.linalg.norm(self.err_pos), np.linalg.norm(self.err_ori))
+        )
+
+"""
+    Subclass of Task, representing the Heading Orientation of the mobile base task.
+"""
+class MMOrientation(Task):
+    def __init__(self, name, desired, feedforward, gain):
+        super().__init__(name, desired, feedforward, gain)
+
+    def update(self, robot):
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J  = (robot.getMMJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
+        # Update task error
+        self.err = self.K @ (self.getDesired() - robot.getMMorientation()) + self.getFeedForward().reshape(self.task_dim, 1)
        
 
     def track_err(self):
@@ -184,77 +230,27 @@ class EEOrientation3D(Task):
 
 
 """
-    Subclass of Task, representing the 2D configuration task.
+    Subclass of Task, representing the position of the mobile base task.
 """
-
-
-class Configuration3D(Task):
-    def __init__(self, name, desired, feedforward, gain, link):
+class MMposition(Task):
+    def __init__(self, name, desired, feedforward, gain):
         super().__init__(name, desired, feedforward, gain)
-        self.J = np.zeros((5, 0))
-        self.err = np.zeros((5, 0))
-        self.link = link
-        self.FeedForward = feedforward
-        self.K = gain
 
     def update(self, robot):
-        self.J = np.delete(robot.getLinkJacobian(self.link), 2, 0)
-        self.err_pos = (
-            (self.getDesired()[0:2, 0]).reshape(2, 1)
-            - (
-                (robot.getLinkTransform(self.link)[0:2, 3]).reshape(
-                    (self.getDesired().shape[0]) - 3, 1
-                )
-            )
-        ).reshape((self.getDesired().shape[0]) - 3, 1)
-        r = R.from_matrix(robot.getLinkTransform(self.link)[0:3, 0:3])
-        euler = (r.as_euler("xyz")).reshape(3, 1)
-        self.err_ori = (self.getDesired()[2:, 0]).reshape(3, 1) - euler
-        self.err = self.K @ (
-            np.block([[self.err_pos], [self.err_ori]]).reshape(5, 1)
-        ) + self.getFeedForward().reshape(5, 1)
-        pass  # to remove
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J  = (robot.getMMJacobian()[0:2, :]).reshape((self.task_dim, DoF)) 
+        # Update task error
+        self.err = self.K @ (self.getDesired() - robot.getMMposition()) + self.getFeedForward().reshape(self.task_dim, 1)
+       
 
     def track_err(self):
-        self.err_hist.append(
-            (np.linalg.norm(self.err_pos), np.linalg.norm(self.err_ori))
-        )
-
-
-"""
-    Subclass of Task, representing the joint position task.
-"""
-
-
-class JointPosition(Task):
-    def __init__(self, name, desired_joint_number, desired, feedforward, gain):
-        super().__init__(name, desired, feedforward, gain)
-        self.J = np.zeros((1, 0))
-        self.err = np.zeros((1, 1))
-        self.desired_joint_number = desired_joint_number
-        self.FeedForward = feedforward
-        self.K = gain
-
-    def update(self, robot):
-        self.J = np.array(
-            [
-                1 if i == self.desired_joint_number - 1 else 0
-                for i in range(robot.getDOF())
-            ]
-        ).reshape((1, robot.getDOF()))
-        self.err = self.K @ (
-            np.array(
-                [self.getDesired() - robot.getJointPos(self.desired_joint_number)]
-            ).reshape((1, 1))
-        ) + self.FeedForward.reshape(1, 1)
-        pass
+        self.err_hist.append(np.linalg.norm(self.getError()))
 
 
 """ 
     Subclass of Task, representing the joint limit task.
 """
-
-
 class JointLimits(Task):
     def __init__(
         self,

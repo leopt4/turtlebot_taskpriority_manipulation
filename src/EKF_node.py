@@ -67,6 +67,8 @@ class EKF:
     
     # Ground Truth callback: Gets current robot pose and stores it into self.current_pose. Besides, get heading as a measurement to update filter
     def get_ground_truth(self, odom):
+        timestamp        = odom.header.stamp
+        # Read orientation and position
         _, _, yaw = tf.transformations.euler_from_quaternion([odom.pose.pose.orientation.x, 
                                                             odom.pose.pose.orientation.y,
                                                             odom.pose.pose.orientation.z,
@@ -74,14 +76,15 @@ class EKF:
         self.current_pose = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, yaw])
 
         # Get heading as a measurement to update filter
-        if self.mag.read_magnetometer(yaw-self.yawOffset) and self.ekf_filter is not None:
+        if self.mag.read_magnetometer(yaw-self.yawOffset, timestamp) and self.ekf_filter is not None:
             self.ekf_filter.gotNewHeadingData()
 
     # Odometry callback: Gets encoder reading to compute displacement of the robot as input of the EKF Filter.
     # Run EKF Filter with frequency of odometry reading
     def get_odom(self, odom):
+        timestamp        = odom.header.stamp
         # Read encoder
-        if self.odom.read_encoder(odom) and self.ekf_filter is not None:
+        if len(odom.name) == 2 and self.odom.read_encoder(odom, timestamp) and self.ekf_filter is not None:
             self.ekf_filter.gotNewEncoderData()
 
         if self.ekf_filter is not None:
@@ -91,16 +94,16 @@ class EKF:
             self.x_map       = Pose3D.oplus(self.x_frame_k, self.xk)
 
             # Publish rviz
-            self.odom_path_pub()
+            self.odom_path_pub(timestamp)
 
-            self.publish_tf_map()
+            self.publish_tf_map(timestamp)
 
     # Publish markers
-    def publish_point(self,p):
+    def publish_point(self, p, timestamp):
         if p is not None:
             m = Marker()
             m.header.frame_id = 'world_ned'
-            m.header.stamp = rospy.Time.now()
+            m.header.stamp = timestamp
             m.ns = 'point'
             m.id = 0
             m.type = Marker.SPHERE
@@ -122,13 +125,13 @@ class EKF:
             self.point_marker_pub.publish(m)
 
     # Publish Filter results
-    def odom_path_pub(self):
+    def odom_path_pub(self, timestamp):
         # Transform theta from euler to quaternion
         quaternion = tf.transformations.quaternion_from_euler(0, 0, float((self.xk[2, 0])))  # Convert euler angles to quaternion
 
         # Publish predicted odom
         odom = Odometry()
-        odom.header.stamp = rospy.Time.now()
+        odom.header.stamp = timestamp
         odom.header.frame_id = "map"
         odom.child_frame_id = "turtlebot/kobuki/predicted_base_footprint"
 
@@ -153,10 +156,9 @@ class EKF:
 
         self.odom_pub.publish(odom)
 
-        tf.TransformBroadcaster().sendTransform((float(self.xk[0, 0]), float(self.xk[1, 0]), 0.0), quaternion, rospy.Time.now(), odom.child_frame_id, odom.header.frame_id)
-        # tf.TransformBroadcaster().sendTransform((0.0, 0.0, 0.0), quaternion, rospy.Time.now(), odom.child_frame_id, odom.header.frame_id)
+        tf.TransformBroadcaster().sendTransform((float(self.xk[0, 0]), float(self.xk[1, 0]), 0.0), quaternion, timestamp, odom.child_frame_id, odom.header.frame_id)
 
-    def publish_tf_map(self):
+    def publish_tf_map(self, timestamp):
         x_map = self.x_map.copy()
 
         # Define the translation and rotation for the inverse TF (base_footprint to world)
@@ -169,7 +171,7 @@ class EKF:
         tf.TransformBroadcaster().sendTransform(
             translation,
             rotation,
-            rospy.Time.now(),
+            timestamp,
             "turtlebot/kobuki/base_footprint",
             "map"
         )
