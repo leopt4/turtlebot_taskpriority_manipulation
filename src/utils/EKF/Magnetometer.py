@@ -14,7 +14,7 @@ class Magnetometer:
         self.newData        = False         # Flag presenting got new data
         self.Rk             = np.diag([np.deg2rad(1)**2]) # covariance of heading noise
 
-    def read_magnetometer(self, mag):
+    def read_magnetometer(self, mag, timestamp):
         """
         Read encoder method includes updating heading reading
 
@@ -23,7 +23,7 @@ class Magnetometer:
         :return False: not enough encoder reading to compute displacement
         """
         self.heading    = mag
-        self.stamp      = rospy.Time.now() 
+        self.stamp      = timestamp
         self.newData    = True
         return True
 
