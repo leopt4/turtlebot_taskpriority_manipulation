@@ -12,7 +12,6 @@ from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 import tf
-import tf.transformations as tft
 
 class ArucoDetection:
     def __init__(self):
@@ -60,6 +59,8 @@ class ArucoDetection:
                                                     odom.pose.pose.orientation.z,
                                                     odom.pose.pose.orientation.w])
         self.eta = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, yaw]).reshape(-1,1)
+        self.robot_orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
+        self.robot_translation = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
     
     #transform the obtained image to cv2 format to be used by the aruco detector
     def imageToCV(self, image): 
@@ -69,13 +70,11 @@ class ArucoDetection:
         Args:
             image: The image to be saved
         """
-        rospy.loginfo("Image received")
         try:
             cv_image = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough').copy()
             self.publishAruco(cv_image)
-            # self.saveImage(cv_image, "aruco_image.png") #save aruco image to the file (for debugging)
-        except CvBridgeError as e:
-            print(e)
+        except CvBridgeError as err:
+            print(err)
             
     
     def camerainfoCallback(self, data): 
@@ -100,108 +99,62 @@ class ArucoDetection:
         corners, ids, _ = cv2.aruco.detectMarkers(cv_image,self.aruco_dict)    # detect the marker 
         
         if len(corners)>0: #if the aruco is detected
-            print("Aruco detected", ids)
+            # print("Aruco detected", ids)
             
             #estimate the aruco pose (returns the rotation and translation vector) 
             rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_size, self.camera_matrix, self.dist_coeffs)
-            print("tvec", tvec)
-            print("rvec", rvec)
-            print("-" * 40)
             
-            if len(ids) > 1: #for each marker detected
-                
-                #draw the axis of the aruco marker
-                #self.drawAxis(cv_image, self.camera_matrix, self.dist_coeffs, rvec[i], tvec[i], 0.01)
-                
-                # #publish the pose of the aruco marker in the world frame
-                self.transformArucoPose(rvec[0], tvec[0])
+            for i in range(len(ids)): #for each marker detected
+                rvec_i = rvec[i,:,:].reshape(3,1)
+                tvec_i = tvec[i,:,:].reshape(3,1)
+
+                object_pose_world = self.compute_object_pose_in_world(rvec_i, tvec_i)
+
+                # Extract translation and rotation (quaternion) from the object's pose in the world frame
+                object_translation_world = object_pose_world[:3, 3]
+  
+                object_quaternion_world = tf.transformations.quaternion_from_matrix(object_pose_world)
+
+                #################### POSE PUBLISHER OF ARUCO IN WORLD NED FRAME #############################
+                aruco_position = PoseStamped()
+                aruco_position.header.frame_id = "map"
+                aruco_position.pose.position.x = object_translation_world[0]
+                aruco_position.pose.position.y = object_translation_world[1]
+                aruco_position.pose.position.z = object_translation_world[2]
+                aruco_position.pose.orientation.x = object_quaternion_world[0]
+                aruco_position.pose.orientation.y = object_quaternion_world[1]
+                aruco_position.pose.orientation.z = object_quaternion_world[2]
+                aruco_position.pose.orientation.w = object_quaternion_world[3]
+                self.marker_pub.publish(aruco_position)
             
             
         else :
             print("No Aruco detected")
             
-    def transformArucoPose(self, rvec, tvec):
-        
-        ################### TRANSFORMATION FROM ARUCO TO CAMERA FRAME ##########################            
-        
-        R_ac, _ = cv2.Rodrigues(rvec)           #3x3 rotation matrix of aruco to camera (from rotation vector rvec)
-        T_ac = tvec.reshape((3,))               #convert the translation vector of the aruco into a 3x1 vector
-        print(R_ac, "Rotation matrix camera to aruco", "\n")            
-        
-        #to double check that the transformation is correct
-        arucoPoint = PointStamped()
-        arucoPoint.header.frame_id = 'turtlebot/kobuki/realsense_color'
-        arucoPoint.point.x = T_ac[0]
-        arucoPoint.point.y = T_ac[1]
-        arucoPoint.point.z = T_ac[2]
-        
-        point = self.tf_listener.transformPoint('map', arucoPoint)
-        
-        print(f"camera_to_aruco: {point.point.x}, {point.point.y}, {point.point.z}")
-        print(point.header.frame_id)
+    # Step 3: Compute the object's position in the world frame
+    def compute_object_pose_in_world(self, rvec, tvec):
+        # Get transformation matrix object in camera frame
+        rotation_matrix_object_in_camera = rvec_to_rot_matrix(rvec)
+        object_in_camera = create_homogeneous_transform(rotation_matrix_object_in_camera, tvec)
 
+        # Get transformation matrix camera in base footprint frame
+        camera_rot_matrix = tf.transformations.quaternion_matrix(np.array([0.500, 0.500, 0.500, 0.500]))
+        camera_in_robot = np.eye(4)
+        camera_in_robot[:3, :3] = camera_rot_matrix[:3, :3]
+        camera_in_robot[0:3, 3] = np.array([0.136, -0.033, -0.116])
 
-        #arrange translation and rotation matrices for aruco to camera transformation 
-        cTa= np.eye(4)
-        cTa[0:3, 0:3] = R_ac                #rotation part
-        cTa[0:3, 3] = T_ac                  #translation part
-        print(T_ac, "translation vector camera to aruco", "\n")
-        
-        # cTa[0, 3] += self.box_width/2         # Add delta_x to the x component of translation
-        # cTa[1, 3] += -self.box_height/2        # Add delta_y to the y component of translation
-        # cTa[2, 3] += self.box_width/2        # Add delta_z to the z component of translation
-    
-        ################### TRANSFORMATION FROM CAMERA TO BASE FRAME ##########################             
+        # Get transformation matric robot base footprint in the map frame
+        # Convert quaternion to rotation matrix
+        robot_rot_matrix = tf.transformations.quaternion_matrix(self.robot_orientation)
+        # Create homogeneous transformation matrix for robot in the world frame
+        robot_in_world = np.eye(4)
+        robot_in_world[:3, :3] = robot_rot_matrix[:3, :3]
+        robot_in_world[0:3, 3] = self.robot_translation
 
-        #extract transformation vectors from camera to world frame tf
-        (trans,rot) = self.tf_listener.lookupTransform('turtlebot/kobuki/base_footprint', 'turtlebot/kobuki/realsense_color', rospy.Time(0))
-        print((trans,rot), "trans rot vectors from base to camera", "\n")
-        
-        #convert translation and rotation vectors to transformation matrix
-        bTc = tf.transformations.quaternion_matrix(rot)
-        bTc[0,3] = trans[0]; bTc[1,3] = trans[1]; bTc[2,3] = trans[2]
-        print(bTc, "t matrix base to camera", "\n")
-        
-        ################### TRANSFORMATION FROM BASE TO ROBOT FRAME ##########################
-            
-        r = self.eta
-        wTb = np.eye(4)
-        wTb = np.array(
-                [[np.cos(r[2,0]), -np.sin(r[2,0]), 0, r[0,0]],
-                [np.sin(r[2,0]), np.cos(r[2,0]), 0, r[1,0]],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1]]).reshape(4,4)
-        print(wTb, "t matrix world to base", "\n")
-        
-        #to place the aruco frame at the top center of the box
-        centering_pose = np.array([
-                                [1, 0, 0, 0],
-                                [0, 1, 0, self.box_height/2],
-                                [0, 0, 1, self.box_length/2],
-                                [0, 0, 0, 1]
-                            ])              
-        
-        wTa_uncentered = wTb @ bTc @ cTa #world to base * base to camera * camera to aruco
-        wTa = wTa_uncentered @ centering_pose #world to base * topcenter matrix  
-        print(wTa, "wTa")
-        
-        # to get the pose.orientation of the aruco in world ned frame
-        wTa_q = tft.quaternion_from_matrix(wTa)
-       
-        
-        #################### POSE PUBLISHER OF ARUCO IN WORLD NED FRAME #############################
-        aruco_position = PoseStamped()
-        aruco_position.header.frame_id = "map"
-        aruco_position.pose.position.x = wTa[0,3]
-        aruco_position.pose.position.y = wTa[1,3]
-        aruco_position.pose.position.z = wTa[2,3]
-        aruco_position.pose.orientation.x = wTa_q[0]
-        aruco_position.pose.orientation.y = wTa_q[1]
-        aruco_position.pose.orientation.z = wTa_q[2]
-        aruco_position.pose.orientation.w = wTa_q[3]
-        self.marker_pub.publish(aruco_position)
-        
-        rospy.loginfo("Aruco pose published")
+        # Compute the object's pose in the world frame
+        object_in_robot = np.dot(camera_in_robot, object_in_camera)
+        object_in_world = np.dot(robot_in_world, object_in_robot)
+        return object_in_world
 
     #for debugging
     def saveImage(self, image, file_path):
@@ -211,6 +164,19 @@ class ArucoDetection:
         plt.savefig(file_path, bbox_inches='tight', pad_inches=0)  # Save image without extra whitespace
         plt.close()  # Close plot to prevent display
 
+
+# Step 1: Convert rvec to a rotation matrix
+def rvec_to_rot_matrix(rvec):
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    return rotation_matrix
+
+# Step 2: Construct the homogeneous transformation matrix
+def create_homogeneous_transform(rotation_matrix, translation_vector):
+    transformation_matrix = np.eye(4)
+    transformation_matrix[:3, :3] = rotation_matrix
+    transformation_matrix[:3, 3] = translation_vector.T
+    return transformation_matrix
+    
 if __name__ == "__main__":
 
     print("ARUCO POSE DETECTOR NODE INITIALIZED")
