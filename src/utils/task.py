@@ -216,7 +216,6 @@ class MMOrientation(Task):
         self.J  = (robot.getMMJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
         # Update task error
         self.err = self.K @ (normalize_angle(self.getDesired() - robot.getMMorientation())) + self.getFeedForward().reshape(self.task_dim, 1)
-       
 
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))
@@ -236,6 +235,31 @@ class MMPosition(Task):
         # Update task error
         self.err = self.K @ (self.getDesired() - robot.getMMposition()) + self.getFeedForward().reshape(self.task_dim, 1)
        
+
+    def track_err(self):
+        self.err_hist.append(np.linalg.norm(self.getError()))
+
+"""
+    Subclass of Task, representing the position of the mobile base task.
+"""
+class MMConfiguration(Task):
+    def __init__(self, name, desired, feedforward, gain):
+        super().__init__(name, desired, feedforward, gain)
+
+    def update(self, robot):
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J  = (robot.getMMJacobian()[[0,1,5]]).reshape((self.task_dim, DoF)) 
+
+        # Update task error
+        self.err_pos = (self.getDesired()[0:2, 0]).reshape(2, 1) - robot.getMMposition()
+
+        self.err_ori = self.getDesired()[-1] - robot.getMMorientation()
+        
+        self.err = self.K @ (
+            np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
+        ) + self.getFeedForward().reshape(self.task_dim, 1)
+
 
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))

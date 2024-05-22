@@ -9,8 +9,8 @@ from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
-
-import random
+from geometry_msgs.msg import PoseStamped
+import math
 
 class TP_controller:
     def __init__(self):
@@ -19,17 +19,25 @@ class TP_controller:
 
         self.readParams()
 
-        self.tasks = [ 
-            Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 1),
-            Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 2),
-            Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 3),
-            Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 4),
+        self.tasks = []
+            # Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 1),
+            # Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 2),
+            # Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 3),
+            # Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), 0.5*np.eye(1,1), 4),
             # EEPosition3D("End-effector position", np.array([2.0, 4.0, -0.2]).reshape(3,1), np.zeros((3,1)), 0.3*np.eye(3,3)),
             # EEConfiguration3D("End-effector configuration", np.array([-2.0, 2.3, -0.3, 0.3]).reshape(4,1), np.zeros((4,1)), 0.4*np.eye(4,4))
             # 
-            MMOrientation("Mobile Base orientation", np.array([0.0]).reshape(1,1), np.zeros((1,1)), 0.1*np.eye(1,1)),
-            MMPosition("Mobile base position", np.array([-2.0, 2.0]).reshape(2,1), np.zeros((2,1)), 0.3*np.eye(2,2))
+            # MMOrientation("Mobile Base orientation", np.array([1.57]).reshape(1,1), np.zeros((1,1)), 0.3*np.eye(1,1))
+            # MMPosition("Mobile base position", np.array([1.0, 2.0]).reshape(2,1), np.zeros((2,1)), 0.2*np.eye(2,2))
+            # MMConfiguration("Mobile base configuration", np.array([3.0, 2.0, 1.57]).reshape(3,1), np.zeros((3,1)), a)
             
+        # ] 
+
+        gain = 0.05*np.eye(3,3)
+        gain[2,2] = 0.1
+
+        self.tasks = [ 
+            MMConfiguration("Mobile base configuration", np.array([2, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
         ] 
 
         self.robot              = MobileManipulator()
@@ -40,6 +48,8 @@ class TP_controller:
         # Subcribe to get manipulator state
         self.swiftpro_joint_state_sub   = rospy.Subscriber(self.joint_state_topic, JointState, self.swiftProJointCB)
         
+        # Subcribe to get aruco pose
+        self.aruco_pose_object_sub      = rospy.Subscriber(self.aruco_pose_topic, PoseStamped, self.arucoPoseCB)
         # self.task_sub                   = rospy.Subscriber(task_topic, type, self.taskCB)
         
         self.listener = tf.TransformListener()
@@ -99,6 +109,7 @@ class TP_controller:
                                                 weight_joint4])
         
         self.joint_state_topic  = rospy.get_param('joint_state_topic', default= "/turtlebot/joint_states")
+        self.aruco_pose_topic   = rospy.get_param('aruco_pose_topic', default= "/aruco_pose")
         self.task_topic         = rospy.get_param('task_topic', default= "None")
         self.cmd_vel_topic      = rospy.get_param('cmd_vel_topic', default= "/cmd_vel")
         self.cmd_dq_topic       = rospy.get_param('cmd_dq_topic', default= "/turtlebot/swiftpro/joint_velocity_controller/command")
@@ -139,11 +150,11 @@ class TP_controller:
         err_msg             = Float64MultiArray()
 
         # Fill the message with data
-        mobileBase_msg.angular.z    = dq[0]
+        mobileBase_msg.angular.z    = -dq[0]
         mobileBase_msg.linear.x     = dq[1]
         manipulator_msg.data        = dq[2:6]
 
-        err_msg.data  = [np.linalg.norm((self.tasks[5].err[0:3]))]
+        err_msg.data  = [np.linalg.norm((self.tasks[-1].err[0:3]))]
         
 
         # Publish the message
@@ -157,7 +168,7 @@ class TP_controller:
         self.plot()
 
     def plot(self):
-        desiredPoint = self.tasks[5].getDesired()
+        desiredPoint = self.tasks[-1].getDesired()
         EEpositionPoint = self.robot.getEEposition()
         EEorietation = self.robot.getEEorientation()
 
@@ -232,7 +243,21 @@ class TP_controller:
             m.color.g = 1.0
             m.color.b = 0.0
             self.point_marker_pub.publish(m)
+    
+    def arucoPoseCB(self, arucoPose):
+        obj_pos_x = float(arucoPose.pose.position.x)
+        obj_pos_y = float(arucoPose.pose.position.y)
+        obj_pos_z = float(arucoPose.pose.position.z)
+
+        relX = obj_pos_x - self.robot.eta[0]
+        relY = obj_pos_y - self.robot.eta[1]
+        relDis = np.sqrt(relX*relX+relY*relY)
+        relAngle = math.atan2(relY, relX)
+
+        self.tasks[0].setDesired(np.array([obj_pos_x, obj_pos_y, relAngle]).reshape(3,1))
+
         
+
     def __send_base_command__(self,v,w):
         pass
     

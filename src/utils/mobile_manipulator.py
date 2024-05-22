@@ -204,7 +204,7 @@ class MobileManipulator:
     def reset(self):
         # Reset the robot's state to the initial conditions
         self.q = np.zeros((len(self.revolute), 1))
-        self.eta = np.zeros((3, 1))
+        self.eta = np.zeros((4, 1))
         self.update(np.zeros((self.dof, 1)), 0.0)
 
     '''
@@ -322,7 +322,7 @@ class MobileManipulator:
         Method that returns the moblie base position.
     '''
     def getMMorientation(self):
-        return np.array([normalize_angle(self.eta[3])]).reshape(1,1)
+        return np.array([self.eta[3]]).reshape(1,1)
     
     '''
         Method that update the manipulator states from the sensor.
