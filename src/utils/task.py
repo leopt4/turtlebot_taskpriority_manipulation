@@ -283,7 +283,7 @@ class Limit2D(Task):
         # Update task error
         q_i = robot.getJointPos(self.link_index)
         
-        self.err = np.array([1.0]).reshape(1,1)
+        self.err = np.array([0.05]).reshape(1,1)
         # Compute activation function
         if self.active == 0 and q_i >= self.getDesired()[0,1] - self.threshold[0]:
             self.active = -1
