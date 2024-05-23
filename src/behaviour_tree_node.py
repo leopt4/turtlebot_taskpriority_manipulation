@@ -1,11 +1,17 @@
 #!/usr/bin/python3
-
 import py_trees
 import rospy
 from geometry_msgs.msg import PoseStamped
 import time
 from tf.transformations import quaternion_from_euler
 from std_srvs.srv import SetBool
+import actionlib
+
+
+from utils.task import *
+from turtlebot_taskpriority_manipulation.msg import TaskMsg
+from std_msgs.msg import Float64MultiArray
+
 
 class setGoal (py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -53,7 +59,6 @@ class setGoal (py_trees.behaviour.Behaviour):
        
 
         return py_trees.common.Status.SUCCESS
-
 class moveTurtlebot (py_trees.behaviour.Behaviour):
     # this one only moves the base of the robot. no arm behavior here.
     def __init__(self, name): 
@@ -77,8 +82,6 @@ class moveTurtlebot (py_trees.behaviour.Behaviour):
         print(self.client.get_state())
         if self.client.get_state() == actionlib.GoalStatus.PENDING or self.client.get_state() == actionlib.GoalStatus.LOST:
             
-        
-
 class moveSwiftpro (py_trees.behaviour.Behaviour):
     # this one only moves the base of the robot. no arm behavior here.
     def __init__(self, name):
@@ -161,7 +164,181 @@ class EnableSuction (py_trees.behaviour.Behaviour):
         except rospy.ServiceException as e:
             print(f"Service call failed: {e}")
             return False
+
+class ApproachBaseObject(py_trees.behaviour.Behaviour):
+    def __init__(self, name):
+        super(ApproachBaseObject, self).__init__(name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key(
+            "n_points", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(
+            "goal", access=py_trees.common.Access.READ)
+        # Current robot SE2 pose [x, y, yaw], None if unknown            
+        self.current_pose = None
+
+    def setup(self):
+        self.logger.debug("  %s [ApproachBaseObject::setup()]" % self.name)
+        self.tasks = [ 
+            MMConfiguration("Mobile base configuration", np.array([0, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
+        ] 
+
+        # PUBLISHERS
+        # Publisher for sending task to the TP control node
+        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+
+        # SUBSCRIBERS
+        # Subcribe to get aruco pose
+        self.aruco_pose_object_sub      = rospy.Subscriber("/aruco_pose", PoseStamped, self.arucoPoseCB)
+        #subscriber to task error 
+        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+
+        # Wait 0.2s to init pub and sub
+        time.sleep(0.2)
+        self.logger.debug("  %s [ApproachBaseObject::setup() SUCCESS]" % self.name)
+
+    def initialise(self):
+        self.logger.debug("  %s [ApproachBaseObject::initialise()]" % self.name)     
+
+    def update(self):
+
+        if self.err < 0.35:
+            self.logger.debug("  %s [ApproachBaseObject::Update() SUCCESS]" % self.name)
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.logger.debug("  %s [ApproachBaseObject::Update() RUNNING]" % self.name)
+            return py_trees.common.Status.RUNNING
+
+
+    def terminate(self, new_status):
+        self.logger.debug("  %s [ApproachBaseObject::terminate().terminate()][%s->%s]" %
+                          (self.name, self.status, new_status))
         
+    # Odometry callback: Gets current robot pose and stores it into self.current_pose
+    def get_err(self, err):
+        self.err = np.array(err)
+
+    # Aruco pose detector callback
+    def arucoPoseCB(self, arucoPose):
+        obj_pos_x = float(arucoPose.pose.position.x)
+        obj_pos_y = float(arucoPose.pose.position.y)
+        obj_pos_z = float(arucoPose.pose.position.z)
+
+        self.tasks[0].setDesired(np.array([obj_pos_x, obj_pos_y, 0.0]).reshape(3,1))
+
+        task_msg = TaskMsg
+        task_msg.name = self.tasks[0].name
+        task_msg.desired = [self.tasks[0].getDesired()[0], self.tasks[0].getDesired()[1], self.tasks[0].getDesired()[2]]
+        task_msg.gain = [0.1, 0.1, 0.2]
+        task_msg.feedForward = [0.0, 0.0, 0.0]
+        self.task_publisher.publish(task_msg)
+
+class ApproachManipulatorObject(py_trees.behaviour.Behaviour):
+    def __init__(self, name):
+        super(ApproachBaseObject, self).__init__(name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key(
+            "n_points", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(
+            "goal", access=py_trees.common.Access.READ)
+        # Current robot SE2 pose [x, y, yaw], None if unknown            
+        self.current_pose = None
+
+    def setup(self):
+        self.logger.debug("  %s [ApproachBaseObject::setup()]" % self.name)
+        self.tasks = [ 
+            MMConfiguration("Mobile base configuration", np.array([0, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
+        ] 
+
+        # PUBLISHERS
+        # Publisher for sending task to the TP control node
+        self.goal_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+
+        # SUBSCRIBERS
+        # Subcribe to get aruco pose
+        self.aruco_pose_object_sub      = rospy.Subscriber("/aruco_pose", PoseStamped, self.arucoPoseCB)
+        #subscriber to task error 
+        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+
+        # Wait 0.2s to init pub and sub
+        time.sleep(0.2)
+        self.logger.debug("  %s [ApproachBaseObject::setup() SUCCESS]" % self.name)
+
+    def initialise(self):
+        self.logger.debug("  %s [ApproachBaseObject::initialise()]" % self.name)     
+
+    def update(self):
+
+        if self.err < 0.35:
+            self.logger.debug("  %s [ApproachBaseObject::Update() SUCCESS]" % self.name)
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.logger.debug("  %s [ApproachBaseObject::Update() RUNNING]" % self.name)
+            return py_trees.common.Status.RUNNING
+
+
+    def terminate(self, new_status):
+        self.logger.debug("  %s [ApproachBaseObject::terminate().terminate()][%s->%s]" %
+                          (self.name, self.status, new_status))
+        
+    # Odometry callback: Gets current robot pose and stores it into self.current_pose
+    def get_err(self, err):
+        self.err = np.array(err)
+
+    # Aruco pose detector callback
+    def arucoPoseCB(self, arucoPose):
+        obj_pos_x = float(arucoPose.pose.position.x)
+        obj_pos_y = float(arucoPose.pose.position.y)
+        obj_pos_z = float(arucoPose.pose.position.z)
+
+        self.tasks[0].setDesired(np.array([obj_pos_x, obj_pos_y, 0.0]).reshape(3,1))
+
+
+#   Create Behavior trees function
+def create_tree():
+    # Create Behaviors
+    scan_object = ScanObject(name="scan_object")
+
+    approach_base_to_object = ApproachBaseObject(name="approach_base_object")
+
+    approach_manipulator_to_object = ApproachManipulatorObject(name="approach_manipulator_object")
+
+    pick_object = PickObject(name="pick_object")
+
+    approach_base_to_place = ApproachBasePlace(name="approach_base_place")
+
+    let_object = LetObject(name="let_object")
+
+
+    # # Special py_trees behavior
+    # # Check number of points in the list the robot already went to
+    # n_points_lt_5 = py_trees.behaviours.CheckBlackboardVariableValue(
+    #     name="n_points_lt_5",
+    #     check=py_trees.common.ComparisonExpression(
+    #         variable="n_points",
+    #         value=len(points_list),
+    #         operator=operator.lt
+    #     )
+    # )
+
+    # # Check number of objects the robot already collected
+    # n_collected_objects_lt_2 = py_trees.behaviours.CheckBlackboardVariableValue(
+    #     name="n_collected_objects_lt_2",
+    #     check=py_trees.common.ComparisonExpression(
+    #         variable="n_collected_objects",
+    #         value=2,
+    #         operator=operator.lt
+    #     )
+    # )
+    # # Behavior checking end condition of the behavior tree
+    # check_end = py_trees.composites.Sequence(name="check_end", memory=True)
+    # check_end.add_children([n_collected_objects_lt_2, n_points_lt_5])
+
+    root = py_trees.composites.Sequence(name="Life", memory=True)    
+    root.add_children([scan_object, approach_base_to_object, approach_manipulator_to_object, pick_object, approach_base_to_place, let_object])
+    # py_trees.display.render_dot_tree(root)
+    return root
+
+
 
 
 if __name__ == "__main__":
