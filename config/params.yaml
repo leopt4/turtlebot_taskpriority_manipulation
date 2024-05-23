@@ -24,11 +24,13 @@ limit_joint4_upper :  1.571
 limit_joint4_lower : -1.571
 
 limit_joint_threshold_activate : 0.05
-limit_joint_threshold_deactivate : 0.10
+limit_joint_threshold_deactivate : 0.08
 
-weight_base_rotate : 1.000
-weight_base_translate : 1.000
-weight_joint1 : 1.000
+# weight_base_rotate : 0.600
+# weight_base_translate : 0.800
+weight_base_rotate : 15.000
+weight_base_translate : 50.000
+weight_joint1 : 0.500
 weight_joint2 : 1.000
 weight_joint3 : 1.000
 weight_joint4 : 1.000
