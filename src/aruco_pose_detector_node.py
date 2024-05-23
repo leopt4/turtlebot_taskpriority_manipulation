@@ -17,20 +17,20 @@ class ArucoDetection:
     def __init__(self):
         #SUBSCRIBERS    
         #subscribe to camera image for the aruco detection
-        self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_color", Image, self.imageToCV) 
+        self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_raw", Image, self.imageToCV) 
         
         #subscribe to camera info to get the camera matrix and distortion coefficients
         self.camera_info_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/camera_info", CameraInfo, self.camerainfoCallback) 
         
         #subscribe to the odometry topic to use later for transformation from world NED to robot base_footprint
-        self.odom_sub = rospy.Subscriber('/odom',Odometry, self.odomCallback) 
+        self.odom_sub = rospy.Subscriber('/state_estimation',Odometry, self.odomCallback) 
         
         #PUBLISHERS 
         #publish pose of aruco marker in the world frame 
         self.marker_pub = rospy.Publisher("/aruco_pose", PoseStamped, queue_size=1) 
         
         #define aruco dictionary and parameters 
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL) 
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100) 
         self.aruco_params = cv2.aruco.DetectorParameters() 
         
         #bridge object to convert the image from ros to cv2 format
@@ -136,6 +136,11 @@ class ArucoDetection:
         # Get transformation matrix object in camera frame
         rotation_matrix_object_in_camera = rvec_to_rot_matrix(rvec)
         object_in_camera = create_homogeneous_transform(rotation_matrix_object_in_camera, tvec)
+        
+        # Translation: [0.136, -0.032, -0.116]
+        # Rotation: in Quaternion [0.501, 0.498, 0.500, 0.501]
+        #     in RPY (radian) [1.568, -0.002, 1.567]
+        #     in RPY (degree) [89.859, -0.130, 89.811]
 
         # Get transformation matrix camera in base footprint frame
         camera_rot_matrix = tf.transformations.quaternion_matrix(np.array([0.500, 0.500, 0.500, 0.500]))
