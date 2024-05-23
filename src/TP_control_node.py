@@ -33,11 +33,22 @@ class TP_controller:
             
         # ] 
 
-        gain = 0.05*np.eye(3,3)
-        gain[2,2] = 0.1
+        # gain = 0.1*np.eye(3,3)
+        # gain[2,2] = 0.4
 
+        gain = 0.2*np.eye(3,3)
+        gain[2,2] = 0.02
+
+        a  = np.array([0.05, 0.7]).reshape(2,1)
         self.tasks = [ 
-            MMConfiguration("Mobile base configuration", np.array([2, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
+            Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 1),
+            Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 2),
+            Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 3),
+            Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 4),
+
+            # MMOrientation("Mobile Base orientation", np.array([0.0]).reshape(1,1), np.zeros((1,1)), 1.0*np.eye(1,1)),
+            # MMConfiguration("Mobile base configuration", np.array([0, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
+            EEPosition3D("End-effector position", np.array([0.1, 0.4, -0.30]).reshape(3,1), np.zeros((3,1)), gain)
         ] 
 
         self.robot              = MobileManipulator()
@@ -51,7 +62,8 @@ class TP_controller:
         # Subcribe to get aruco pose
         self.aruco_pose_object_sub      = rospy.Subscriber(self.aruco_pose_topic, PoseStamped, self.arucoPoseCB)
         # self.task_sub                   = rospy.Subscriber(task_topic, type, self.taskCB)
-        
+        self.goal_sub      = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.setGoal)
+
         self.listener = tf.TransformListener()
 
         # PUBLISHERS
@@ -84,7 +96,7 @@ class TP_controller:
         limit_joint4_lower = rospy.get_param('limit_joint4_lower', default=-1.571)
 
         limit_joint_threshold_activate      = rospy.get_param('limit_joint_threshold_activate', default=0.05)
-        limit_joint_threshold_deactivate    = rospy.get_param('limit_joint_threshold_deactivate', default=0.10)
+        limit_joint_threshold_deactivate    = rospy.get_param('limit_joint_threshold_deactivate', default=0.08)
 
         # Task hierarchy definition
         self.limit_range_joint1   = np.array([limit_joint1_lower, limit_joint1_upper]).reshape(1,2)
@@ -94,9 +106,9 @@ class TP_controller:
 
         self.threshold_joint      = np.array([limit_joint_threshold_activate, limit_joint_threshold_deactivate]).reshape(2,1)
 
-        weight_base_rotate      = rospy.get_param('weight_base_rotate', default= 1.000)
-        weight_base_translate   = rospy.get_param('weight_base_translate', default= 1.000)
-        weight_joint1           = rospy.get_param('weight_joint1', default= 1.000)
+        weight_base_rotate      = rospy.get_param('weight_base_rotate', default= 10.000)
+        weight_base_translate   = rospy.get_param('weight_base_translate', default= 50.000)
+        weight_joint1           = rospy.get_param('weight_joint1', default= 0.500)
         weight_joint2           = rospy.get_param('weight_joint2', default= 1.000)
         weight_joint3           = rospy.get_param('weight_joint3', default= 1.000)
         weight_joint4           = rospy.get_param('weight_joint4', default= 1.000)
@@ -150,8 +162,22 @@ class TP_controller:
         err_msg             = Float64MultiArray()
 
         # Fill the message with data
+        # angular velocity
+        # if -dq[0] > 0.5:
+        #     mobileBase_msg.angular.z    = 0.5
+        # elif -dq[0] < -0.5:
+        #     mobileBase_msg.angular.z    = -0.5
+        # else:
         mobileBase_msg.angular.z    = -dq[0]
-        mobileBase_msg.linear.x     = dq[1]
+
+        # Linear velocity
+        # if dq[1] > 0.3:
+        #     mobileBase_msg.linear.x = 0.3
+        # elif dq[1] < -0.3:
+        #     mobileBase_msg.linear.x = -0.3
+        # else:
+        mobileBase_msg.linear.x = dq[1]
+
         manipulator_msg.data        = dq[2:6]
 
         err_msg.data  = [np.linalg.norm((self.tasks[-1].err[0:3]))]
@@ -254,9 +280,15 @@ class TP_controller:
         relDis = np.sqrt(relX*relX+relY*relY)
         relAngle = math.atan2(relY, relX)
 
-        self.tasks[0].setDesired(np.array([obj_pos_x, obj_pos_y, relAngle]).reshape(3,1))
+        # self.tasks[-1].setDesired(np.array([obj_pos_x, obj_pos_y, relAngle]).reshape(3,1))
+        self.tasks[-1].setDesired(np.array([obj_pos_x, obj_pos_y, -0.30]).reshape(3,1))
+        # self.tasks[-1].setDesired(np.array([relAngle]).reshape(1,1))
 
-        
+    def setGoal(self, goalMsg):
+        goal_x = goalMsg.pose.position.x
+        goal_y = goalMsg.pose.position.y
+
+        self.tasks[-1].setDesired(np.array([goal_x, goal_y, -0.30]).reshape(3,1))
 
     def __send_base_command__(self,v,w):
         pass
