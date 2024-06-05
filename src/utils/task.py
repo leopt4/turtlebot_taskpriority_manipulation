@@ -29,8 +29,9 @@ class Task:
         self.FeedForward    = feedforward           # Feed forward velocity
         self.K              = gain                  # Gain feed forward controller      
         self.err_hist = []
-
-        self.err    = np.zeros((self.task_dim, 1))              # Initialize with proper dimensions
+        
+        self.error_task     = np.zeros((self.task_dim, 1))              # Initialize with proper dimensions
+        self.err            = np.zeros((self.task_dim, 1))              # Initialize with proper dimensions
 
         self.active = 1                             # Activation function
 
@@ -78,6 +79,15 @@ class Task:
             object: Task error.
         """
         return self.err
+    
+    def getErrorTask(self):
+        """
+        Gets the task error (tilde sigma).
+
+        Returns:
+            object: Task error.
+        """
+        return self.error_task
 
     def track_err(self):
         """ 
@@ -153,6 +163,8 @@ class EEPosition3D(Task):
         # Update Jacobean matrix - task Jacobian
         self.J = robot.getEEJacobian()[0:3, :]
         # Update task error
+        self.error_task = self.getDesired() - robot.getEEposition()
+
         self.err = self.K @ (self.getDesired() - robot.getEEposition()) + self.getFeedForward().reshape(self.task_dim, 1)
 
 
@@ -171,6 +183,8 @@ class EEOrientation3D(Task):
         # Update Jacobean matrix - task Jacobian
         self.J  = (robot.getEEJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
         # Update task error
+        self.error_task = self.getDesired() - robot.getEEorientation()
+
         self.err = self.K @ (self.getDesired() - robot.getEEorientation()) + self.getFeedForward().reshape(self.task_dim, 1)
        
 
@@ -194,6 +208,8 @@ class EEConfiguration3D(Task):
 
         self.err_ori = normalize_angle(self.getDesired()[-1] - robot.getEEorientation())
         
+        self.error_task =  np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
+
         self.err = self.K @ (
             np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
         ) + self.getFeedForward().reshape(self.task_dim, 1)
@@ -215,6 +231,8 @@ class MMOrientation(Task):
         # Update Jacobean matrix - task Jacobian
         self.J  = (robot.getMMJacobian()[-1, :]).reshape((self.task_dim, DoF)) 
         # Update task error
+        self.error_task = normalize_angle(self.getDesired() - robot.getMMorientation())
+
         self.err = self.K @ (normalize_angle(self.getDesired() - robot.getMMorientation())) + self.getFeedForward().reshape(self.task_dim, 1)
 
     def track_err(self):
@@ -233,6 +251,8 @@ class MMPosition(Task):
         # Update Jacobean matrix - task Jacobian
         self.J  = (robot.getMMJacobian()[0:2, :]).reshape((self.task_dim, DoF)) 
         # Update task error
+        self.error_task = self.getDesired() - robot.getMMposition()
+        
         self.err = self.K @ (self.getDesired() - robot.getMMposition()) + self.getFeedForward().reshape(self.task_dim, 1)
        
 
@@ -256,6 +276,9 @@ class MMConfiguration(Task):
 
         self.err_ori = self.getDesired()[-1] - robot.getMMorientation()
         
+        error_dis = np.linalg.norm(self.err_pos)
+        self.error_task = np.block([[error_dis], [self.err_ori]]).reshape(2, 1)
+
         self.err = self.K @ (
             np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
         ) + self.getFeedForward().reshape(self.task_dim, 1)
@@ -283,7 +306,7 @@ class Limit2D(Task):
         # Update task error
         q_i = robot.getJointPos(self.link_index)
         
-        self.err = np.array([0.05]).reshape(1,1)
+        self.err = self.K @ np.array([0.05]).reshape(1,1)
         # Compute activation function
         if self.active == 0 and q_i >= self.getDesired()[0,1] - self.threshold[0]:
             self.active = -1
