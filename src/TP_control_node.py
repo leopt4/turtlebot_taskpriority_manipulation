@@ -11,6 +11,7 @@ from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped
 import math
+from turtlebot_taskpriority_manipulation.msg import TaskMsg
 
 class TP_controller:
     def __init__(self):
@@ -39,17 +40,19 @@ class TP_controller:
         gain = 0.2*np.eye(3,3)
         gain[2,2] = 0.02
 
-        a  = np.array([0.05, 0.7]).reshape(2,1)
-        self.tasks = [ 
-            Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 1),
-            Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 2),
-            Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 3),
-            Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 4),
+        # self.tasks = [ 
+        #     Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 1),
+        #     Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 2),
+        #     Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 3),
+        #     Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), 0.01*np.eye(1,1), 4),
 
-            # MMOrientation("Mobile Base orientation", np.array([0.0]).reshape(1,1), np.zeros((1,1)), 1.0*np.eye(1,1)),
-            # MMConfiguration("Mobile base configuration", np.array([0, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
-            EEPosition3D("End-effector position", np.array([0.1, 0.4, -0.30]).reshape(3,1), np.zeros((3,1)), gain)
-        ] 
+        #     # MMOrientation("Mobile Base orientation", np.array([0.0]).reshape(1,1), np.zeros((1,1)), 1.0*np.eye(1,1)),
+        #     # MMConfiguration("Mobile base configuration", np.array([0, 0, 0]).reshape(3,1), np.zeros((3,1)), gain)
+        #     EEPosition3D("End-effector position", np.array([0.1, 0.4, -0.30]).reshape(3,1), np.zeros((3,1)), gain)
+        # ] 
+
+        self.tasks = []
+        self.taskID = "0"
 
         self.robot              = MobileManipulator()
         # self.taskhandler        = taskHandler(self.robot)
@@ -60,9 +63,11 @@ class TP_controller:
         self.swiftpro_joint_state_sub   = rospy.Subscriber(self.joint_state_topic, JointState, self.swiftProJointCB)
         
         # Subcribe to get aruco pose
-        self.aruco_pose_object_sub      = rospy.Subscriber(self.aruco_pose_topic, PoseStamped, self.arucoPoseCB)
+        # self.aruco_pose_object_sub      = rospy.Subscriber(self.aruco_pose_topic, PoseStamped, self.arucoPoseCB)
         # self.task_sub                   = rospy.Subscriber(task_topic, type, self.taskCB)
         self.goal_sub      = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.setGoal)
+
+        self.task_sub      = rospy.Subscriber("/task", TaskMsg, self.setTask)
 
         self.listener = tf.TransformListener()
 
@@ -180,25 +185,33 @@ class TP_controller:
 
         manipulator_msg.data        = dq[2:6]
 
-        err_msg.data  = [np.linalg.norm((self.tasks[-1].err[0:3]))]
-        
-
         # Publish the message
         self.cmd_pub.publish(mobileBase_msg)
         # if np.linalg.norm(self.robot.getMMposition()-self.tasks[4].getDesired()[0:2]) < 0.3:
         self.dq_pub.publish(manipulator_msg)
-            # self.controller.set_weightMatrix(np.diag([1.0, 1.0, 0.1, 0.1, 0.1, 0.1]))
+        # self.controller.set_weightMatrix(np.diag([1.0, 1.0, 0.1, 0.1, 0.1, 0.1]))
 
-        self.err_pub.publish(err_msg)
+        if len(self.tasks) > 0:
+            err_msg.data = []
+
+            for i in range(0, (self.tasks[-1].error_task).shape[0]):
+                err_msg.data.append(self.tasks[-1].error_task[i])
+
+            self.err_pub.publish(err_msg)
+        
         # Plot on the Rviz
         self.plot()
 
+        if len(self.tasks) > 1:
+            desiredPoint = self.tasks[-1].getDesired()
+            self.publish_point(((desiredPoint).flatten()).tolist())
+            
+
     def plot(self):
-        desiredPoint = self.tasks[-1].getDesired()
+        
         EEpositionPoint = self.robot.getEEposition()
         EEorietation = self.robot.getEEorientation()
-
-        self.publish_point(((desiredPoint).flatten()).tolist())
+        
         self.publish_EEpoint(((EEpositionPoint).flatten()).tolist())
 
         # Define the translation and rotation for the inverse TF (base_footprint to world)
@@ -289,6 +302,68 @@ class TP_controller:
         goal_y = goalMsg.pose.position.y
 
         self.tasks[-1].setDesired(np.array([goal_x, goal_y, -0.30]).reshape(3,1))
+
+    def setTask(self, taskMsg):
+        if taskMsg.ids == "1":
+            if self.taskID == "1":
+                task_desired    = np.array([taskMsg.desired[0]]).reshape(1,1)
+                self.tasks[0].setDesired(task_desired)
+            else:
+                task_name       = taskMsg.name
+                task_desired    = np.array([taskMsg.desired[0]]).reshape(1,1)
+                task_gain       = np.array([taskMsg.gain[0]]).reshape(1,1)
+                task_feedForward= np.diag([taskMsg.feedForward[0]])
+                self.tasks = [
+                    MMOrientation(task_name, task_desired, task_feedForward, task_gain)
+                ] 
+                self.controller         = Controller(self.tasks, self.robot, self.weight_matrix)
+                self.taskID = "1"
+                print("Controller: Scan Object -> Create ID: " + self.taskID)
+
+        elif taskMsg.ids == "2":
+            if self.taskID == "2":
+                relX = np.array([taskMsg.desired[0]]) - self.robot.eta[0]
+                relY = np.array([taskMsg.desired[1]]) - self.robot.eta[1]
+                relAngle = math.atan2(relY, relX)
+
+                task_desired    = np.array([taskMsg.desired[0], taskMsg.desired[1], relAngle]).reshape(3,1)
+                self.tasks[0].setDesired(task_desired)
+            else:
+                task_name       = taskMsg.name
+
+                relX = np.array([taskMsg.desired[0]]) - self.robot.eta[0]
+                relY = np.array([taskMsg.desired[1]]) - self.robot.eta[1]
+                relAngle = math.atan2(relY, relX)
+
+                task_desired    = np.array([taskMsg.desired[0], taskMsg.desired[1], relAngle]).reshape(3,1)
+                task_gain       = np.diag([taskMsg.gain[0], taskMsg.gain[1], taskMsg.gain[2]])
+                task_feedForward= np.array([taskMsg.feedForward[0], taskMsg.feedForward[1], taskMsg.feedForward[2]])
+                self.tasks = [
+                    MMConfiguration(task_name, task_desired, task_feedForward, task_gain)
+                ] 
+                self.controller         = Controller(self.tasks, self.robot, self.weight_matrix)
+                self.taskID = "2"
+                print("Controller: Approach Base Object -> Create ID: " + self.taskID)
+        elif taskMsg.ids == "3":
+            if self.taskID == "3":
+                task_desired    = np.array([taskMsg.desired[0], taskMsg.desired[1], taskMsg.desired[2]]).reshape(3,1)
+                self.tasks[-1].setDesired(task_desired)
+            else:
+                task_name       = taskMsg.name
+                task_desired    = np.array([taskMsg.desired[0], taskMsg.desired[1], taskMsg.desired[2]]).reshape(3,1)
+                task_gain       = np.diag([taskMsg.gain[0], taskMsg.gain[1], taskMsg.gain[2]])
+                task_feedForward= np.array([taskMsg.feedForward[0], taskMsg.feedForward[1], taskMsg.feedForward[2]]).reshape(3,1)
+                self.weight_matrix           = np.diag([10, 150, 0.5, 1.0, 1.0, 1.0])
+                self.tasks = [
+                    Limit2D("Manipulator Joint 1 Limitation", self.limit_range_joint1, self.threshold_joint, np.zeros((1,1)), np.eye(1,1), 1),
+                    Limit2D("Manipulator Joint 2 Limitation", self.limit_range_joint2, self.threshold_joint, np.zeros((1,1)), np.eye(1,1), 2),
+                    Limit2D("Manipulator Joint 3 Limitation", self.limit_range_joint3, self.threshold_joint, np.zeros((1,1)), np.eye(1,1), 3),
+                    Limit2D("Manipulator Joint 4 Limitation", self.limit_range_joint4, self.threshold_joint, np.zeros((1,1)), np.eye(1,1), 4),
+                    EEPosition3D("End-effector position", task_desired, task_feedForward, task_gain)
+                ] 
+                self.controller         = Controller(self.tasks, self.robot, self.weight_matrix)
+                self.taskID = "3"
+                print("Controller: Approach Maipulator Object -> Create ID: " + self.taskID)
 
     def __send_base_command__(self,v,w):
         pass
