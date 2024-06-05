@@ -13,7 +13,7 @@ class ManipulatorParams:
         self.mz = 0.0722        # [met]
         self.mx = 0.0565        # [met]
         
-        self.alpha = np.pi/2.0
+        self.alpha = -np.pi/2.0
 
 class MobileBaseParams:
     def __init__(self) -> None:
