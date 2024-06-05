@@ -13,24 +13,29 @@ from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 import tf
 
+
 class ArucoDetection:
     def __init__(self):
         #SUBSCRIBERS    
         #subscribe to camera image for the aruco detection
-        self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_raw", Image, self.imageToCV) 
+        # self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_raw", Image, self.imageToCV) 
+
+        self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_color", Image, self.imageToCV) 
         
         #subscribe to camera info to get the camera matrix and distortion coefficients
         self.camera_info_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/camera_info", CameraInfo, self.camerainfoCallback) 
         
         #subscribe to the odometry topic to use later for transformation from world NED to robot base_footprint
-        self.odom_sub = rospy.Subscriber('/state_estimation',Odometry, self.odomCallback) 
+        # self.odom_sub = rospy.Subscriber('/state_estimation',Odometry, self.odomCallback) 
+        self.odom_sub = rospy.Subscriber('/odom',Odometry, self.odomCallback) 
         
         #PUBLISHERS 
         #publish pose of aruco marker in the world frame 
         self.marker_pub = rospy.Publisher("/aruco_pose", PoseStamped, queue_size=1) 
         
         #define aruco dictionary and parameters 
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100) 
+        # self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100) 
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL) 
         self.aruco_params = cv2.aruco.DetectorParameters() 
         
         #bridge object to convert the image from ros to cv2 format
@@ -107,6 +112,8 @@ class ArucoDetection:
             for i in range(len(ids)): #for each marker detected
                 rvec_i = rvec[i,:,:].reshape(3,1)
                 tvec_i = tvec[i,:,:].reshape(3,1)
+
+                tvec_i[2] += self.box_length / 2.0
 
                 object_pose_world = self.compute_object_pose_in_world(rvec_i, tvec_i)
 
