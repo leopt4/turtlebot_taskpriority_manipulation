@@ -20,19 +20,19 @@ limit_range_joint4   = np.array([limit_joint4_lower, limit_joint4_upper]).reshap
 
 threshold_joint      = np.array([limit_joint_threshold_activate, limit_joint_threshold_deactivate]).reshape(2,1)
 
-weight_base_rotate      = 10.000
-weight_base_translate   = 50.000
-weight_joint1           = 0.500
-weight_joint2           = 1.000
-weight_joint3           = 1.000
-weight_joint4           = 1.000
+BASE_CONFIG_WEIGHT_BASE_ROTATE      = 10.000
+BASE_CONFIG_WEIGHT_BASE_TRANSLATE   = 50.000
+BASE_CONFIG_WEIGHT_JOINT_1           = 0.500
+BASE_CONFIG_WEIGHT_JOINT_2           = 1.000
+BASE_CONFIG_WEIGHT_JOINT_3           = 1.000
+BASE_CONFIG_WEIGHT_JOINT_4           = 1.000
 
-weight_matrix           = np.diag([weight_base_rotate,
-                                    weight_base_translate, 
-                                    weight_joint1, 
-                                    weight_joint2, 
-                                    weight_joint3,
-                                    weight_joint4])
+EE_POS_WEIGHT_BASE_ROTATE      = 10.0
+EE_POS_WEIGHT_BASE_TRANSLATE   = 150.0
+EE_POS_WEIGHT_JOINT_1          = 0.5
+EE_POS_WEIGHT_JOINT_2           = 1.0
+EE_POS_WEIGHT_JOINT_3           = 1.0
+EE_POS_WEIGHT_JOINT_4           = 1.0
 
 # joint_state_topic  = "/turtlebot/joint_states"
 # aruco_pose_topic   = "/aruco_pose"
@@ -41,13 +41,24 @@ weight_matrix           = np.diag([weight_base_rotate,
 # cmd_dq_topic       = "/turtlebot/swiftpro/joint_velocity_controller/command"
 
 FRAME_MAP               = "map"
+FRAME_BASE_FOOTPRINT    = "turtlebot/kobuki/base_footprint"
+FRAME_EE                = "EE"
 
 color_camera_SIL_topic  = "/turtlebot/kobuki/realsense/color/image_color"
 color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
 camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
 odom_SIL_topic          = "/odom"
 odom_HIL_topic          = "/state_estimation"
-aruco_topic             = "/aruco_pose"
+aruco_pose_topic        = "/aruco_pose"
+task_topic              = "/task"
+rviz_goal_topic         = "/move_base_simple/goal"
+
+joint_state_topic       = "/turtlebot/joint_states"
+cmd_vel_topic           = "/cmd_vel"
+cmd_dq_topic            = "/turtlebot/swiftpro/joint_velocity_controller/command"
+EEposition_marker_topic = '~EEposition_point_marker'
+point_marker_topic      = '~desierd_point_marker'
+task_error_topic        = "/error_topic"       
 MODE                    = "SIL"
 # Aruco
 MAKER_SIZE              = 0.05

@@ -42,7 +42,7 @@ class ArucoDetection:
         
         #PUBLISHERS 
         #publish pose of aruco marker in the world frame 
-        self.marker_pub = rospy.Publisher(aruco_topic, PoseStamped, queue_size=1) 
+        self.marker_pub = rospy.Publisher(aruco_pose_topic, PoseStamped, queue_size=1) 
         
         #define aruco dictionary and parameters 
         if MODE == "SIL":
