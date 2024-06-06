@@ -7,35 +7,49 @@ import rospy
 import numpy as np
 import cv2
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseStamped, PointStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 import tf
+from config import *
 
 
 class ArucoDetection:
     def __init__(self):
-        #SUBSCRIBERS    
-        #subscribe to camera image for the aruco detection
-        # self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_raw", Image, self.imageToCV) 
+        
+        if MODE == "SIL":
+            #SUBSCRIBERS    
+            #subscribe to camera image for the aruco detection
+            self.image_sub = rospy.Subscriber(color_camera_SIL_topic, Image, self.imageToCV) 
+        
+            #subscribe to camera info to get the camera matrix and distortion coefficients
+            self.camera_info_sub = rospy.Subscriber(camera_info_topic, CameraInfo, self.camerainfoCallback) 
+        
+            #subscribe to the odometry topic to use later for transformation from world NED to robot base_footprint
+            self.odom_sub = rospy.Subscriber(odom_SIL_topic, Odometry, self.odomCallback) 
+        elif MODE == "HIL":
+            #SUBSCRIBERS    
+            #subscribe to camera image for the aruco detection
+            self.image_sub = rospy.Subscriber(color_camera_HIL_topic, Image, self.imageToCV) 
 
-        self.image_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/image_color", Image, self.imageToCV) 
+            #subscribe to camera info to get the camera matrix and distortion coefficients
+            self.camera_info_sub = rospy.Subscriber(camera_info_topic, CameraInfo, self.camerainfoCallback) 
         
-        #subscribe to camera info to get the camera matrix and distortion coefficients
-        self.camera_info_sub = rospy.Subscriber("/turtlebot/kobuki/realsense/color/camera_info", CameraInfo, self.camerainfoCallback) 
+            #subscribe to the odometry topic to use later for transformation from world NED to robot base_footprint
+            self.odom_sub = rospy.Subscriber(odom_HIL_topic, Odometry, self.odomCallback) 
         
-        #subscribe to the odometry topic to use later for transformation from world NED to robot base_footprint
-        # self.odom_sub = rospy.Subscriber('/state_estimation',Odometry, self.odomCallback) 
-        self.odom_sub = rospy.Subscriber('/odom',Odometry, self.odomCallback) 
         
         #PUBLISHERS 
         #publish pose of aruco marker in the world frame 
-        self.marker_pub = rospy.Publisher("/aruco_pose", PoseStamped, queue_size=1) 
+        self.marker_pub = rospy.Publisher(aruco_topic, PoseStamped, queue_size=1) 
         
         #define aruco dictionary and parameters 
-        # self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100) 
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL) 
+        if MODE == "SIL":
+            self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL) 
+        elif MODE == "HIL":
+            self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100) 
+        
         self.aruco_params = cv2.aruco.DetectorParameters() 
         
         #bridge object to convert the image from ros to cv2 format
@@ -45,15 +59,9 @@ class ArucoDetection:
         self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params) 
         
         #initialise the camera matrix and distortion coefficients for pose estimation + camera size 
-        self.camera_matrix = None 
-        self.dist_coeffs = None 
-        self.marker_size = 0.05 
-        
-        #aruco box dimensions 
-        self.box_width  = 0.07
-        self.box_length = 0.07
-        self.box_height = 0.15
-        
+        self.camera_matrix  = None 
+        self.dist_coeffs    = None 
+     
         #listen to tf directly from the camera frame to the world frame
         self.tf_listener = tf.TransformListener()
     
@@ -90,8 +98,8 @@ class ArucoDetection:
             data: The camera info message.
         
         """
-        self.camera_matrix = np.array(data.K).reshape(3,3) #get the camera matrix from the camera info topic 
-        self.dist_coeffs = np.array(data.D) 
+        self.camera_matrix  = np.array(data.K).reshape(3,3) #get the camera matrix from the camera info topic 
+        self.dist_coeffs    = np.array(data.D) 
         self.camera_info_sub.unregister() 
         
     def publishAruco(self, cv_image): 
@@ -107,13 +115,13 @@ class ArucoDetection:
             # print("Aruco detected", ids)
             
             #estimate the aruco pose (returns the rotation and translation vector) 
-            rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_size, self.camera_matrix, self.dist_coeffs)
+            rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, MAKER_SIZE, self.camera_matrix, self.dist_coeffs)
             
             for i in range(len(ids)): #for each marker detected
                 rvec_i = rvec[i,:,:].reshape(3,1)
                 tvec_i = tvec[i,:,:].reshape(3,1)
-
-                tvec_i[2] += self.box_length / 2.0
+                # Move to center of the box
+                tvec_i[2] += BOX_LENGTH / 2.0
 
                 object_pose_world = self.compute_object_pose_in_world(rvec_i, tvec_i)
 
@@ -124,7 +132,7 @@ class ArucoDetection:
 
                 #################### POSE PUBLISHER OF ARUCO IN WORLD NED FRAME #############################
                 aruco_position = PoseStamped()
-                aruco_position.header.frame_id = "map"
+                aruco_position.header.frame_id = FRAME_MAP
                 aruco_position.pose.position.x = object_translation_world[0]
                 aruco_position.pose.position.y = object_translation_world[1]
                 aruco_position.pose.position.z = object_translation_world[2]
@@ -143,17 +151,12 @@ class ArucoDetection:
         # Get transformation matrix object in camera frame
         rotation_matrix_object_in_camera = rvec_to_rot_matrix(rvec)
         object_in_camera = create_homogeneous_transform(rotation_matrix_object_in_camera, tvec)
-        
-        # Translation: [0.136, -0.032, -0.116]
-        # Rotation: in Quaternion [0.501, 0.498, 0.500, 0.501]
-        #     in RPY (radian) [1.568, -0.002, 1.567]
-        #     in RPY (degree) [89.859, -0.130, 89.811]
 
         # Get transformation matrix camera in base footprint frame
-        camera_rot_matrix = tf.transformations.quaternion_matrix(np.array([0.500, 0.500, 0.500, 0.500]))
+        camera_rot_matrix = tf.transformations.quaternion_matrix(np.array([CAM_BASE_QX, CAM_BASE_QY, CAM_BASE_QZ, CAM_BASE_QW]))
         camera_in_robot = np.eye(4)
         camera_in_robot[:3, :3] = camera_rot_matrix[:3, :3]
-        camera_in_robot[0:3, 3] = np.array([0.136, -0.033, -0.116])
+        camera_in_robot[0:3, 3] = np.array([CAM_BASE_X, CAM_BASE_Y, CAM_BASE_Z])
 
         # Get transformation matric robot base footprint in the map frame
         # Convert quaternion to rotation matrix
@@ -167,14 +170,6 @@ class ArucoDetection:
         object_in_robot = np.dot(camera_in_robot, object_in_camera)
         object_in_world = np.dot(robot_in_world, object_in_robot)
         return object_in_world
-
-    #for debugging
-    def saveImage(self, image, file_path):
-
-        plt.imshow(image)
-        plt.axis('off')  # Hide axes
-        plt.savefig(file_path, bbox_inches='tight', pad_inches=0)  # Save image without extra whitespace
-        plt.close()  # Close plot to prevent display
 
 
 # Step 1: Convert rvec to a rotation matrix

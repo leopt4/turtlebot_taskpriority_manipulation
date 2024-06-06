@@ -39,3 +39,26 @@ weight_matrix           = np.diag([weight_base_rotate,
 # task_topic         = "None"
 # cmd_vel_topic      = "/cmd_vel"
 # cmd_dq_topic       = "/turtlebot/swiftpro/joint_velocity_controller/command"
+
+FRAME_MAP               = "map"
+
+color_camera_SIL_topic  = "/turtlebot/kobuki/realsense/color/image_color"
+color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
+camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
+odom_SIL_topic          = "/odom"
+odom_HIL_topic          = "/state_estimation"
+MODE                    = "SIL"
+# Aruco
+MAKER_SIZE              = 0.05
+BOX_WIDTH               = 0.07
+BOX_LENGTH              = 0.07
+BOX_HEIGHT              = 0.07
+
+CAM_BASE_X              = 0.136
+CAM_BASE_Y              = -0.033
+CAM_BASE_Z              = -0.116
+
+CAM_BASE_QX             = 0.500
+CAM_BASE_QY             = 0.500
+CAM_BASE_QZ             = 0.500
+CAM_BASE_QW             = 0.500
