@@ -53,12 +53,15 @@ aruco_pose_topic        = "/aruco_pose"
 task_topic              = "/task"
 rviz_goal_topic         = "/move_base_simple/goal"
 
+suction_service         = '/turtlebot/swiftpro/vacuum_gripper/set_pump'
+
 joint_state_topic       = "/turtlebot/joint_states"
 cmd_vel_topic           = "/cmd_vel"
 cmd_dq_topic            = "/turtlebot/swiftpro/joint_velocity_controller/command"
 EEposition_marker_topic = '~EEposition_point_marker'
 point_marker_topic      = '~desierd_point_marker'
-task_error_topic        = "/error_topic"       
+task_error_topic        = "/error_topic"
+
 MODE                    = "SIL"
 # Aruco
 MAKER_SIZE              = 0.05
@@ -86,3 +89,44 @@ MANI_MX                 = 0.0565        # [met]
 MANI_ALPHA_SIL          = -np.pi/2.0    # [rad]
 MANI_ALPHA_HIL          = np.pi/2.0     # [rad]
 
+
+# BEHAVIOR TREE
+SCAN_INIT_HEADING       = -np.pi/2.0 
+SCAN_HEADING_STEP       = np.pi/2.0
+SCAN_HEADING_RANGE_LOWER = -0.2         # [rad]
+SCAN_HEADING_RANGE_UPER = 0.0           # [rad]
+SCAN_HEADING_ERROR      = 0.2           # [rad]
+
+MANI_SAFE_HEIGHT        = -0.35         # [met]
+MANI_PICK_HEIGHT        = -0.13         # [met]
+
+# BASE ORIENTATION CONTROLLER CONFIG
+BASE_ORI_GAIN           = 0.1
+BASE_ORI_FEEDFORWARD    = 0.0
+
+# BASE CONFIGURATION CONTROLLER CONFIG
+BASE_CONFIG_GAIN_X                  = 0.1
+BASE_CONFIG_GAIN_Y                  = 0.1
+BASE_CONFIG_GAIN_HEADING            = 0.4
+BASE_CONFIG_FEEDFORWARD_X           = 0.0
+BASE_CONFIG_FEEDFORWARD_Y           = 0.0
+BASE_CONFIG_FEEDFORWARD_HEADING     = 0.0
+BASE_CONFIG_DIS_ERROR_FINISH        = 0.4
+BASE_CONFIG_HEADING_ERROR_FINISH    = 0.3
+
+# EE POSITION CONTROLLER CONFIG
+EE_POS_GAIN_X                       = 0.2
+EE_POS_GAIN_Y                       = 0.2
+EE_POS_GAIN_Z                       = 0.1
+EE_POS_FEEDFORWARD_X                = 0.0
+EE_POS_FEEDFORWARD_Y                = 0.0
+EE_POS_FEEDFORWARD_Z                = 0.0
+EE_POS_ERROR_FINISH                 = 0.1
+EE_POS_ERROR_PICK_OBJ               = 0.02
+
+# GOAL PLACE
+GOAL_PLACE_X                        = 3.0
+GOAL_PLACE_Y                        = 1.0
+
+# TASK
+N_OBJECT                            = 1.0

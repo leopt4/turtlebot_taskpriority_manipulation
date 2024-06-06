@@ -54,20 +54,22 @@ class ScanObject(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.logger.debug("  %s [ScanObject::initialise()]" % self.name)
 
-        self.desired = -np.pi/2.0  
+        self.desired = SCAN_INIT_HEADING 
 
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=1)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=1)
 
         # SUBSCRIBERS
         # Subcribe to get aruco pose
-        self.aruco_pose_object_sub      = rospy.Subscriber("/aruco_pose", PoseStamped, self.arucoPoseCB)
+        self.aruco_pose_object_sub      = rospy.Subscriber(aruco_pose_topic, PoseStamped, self.arucoPoseCB)
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
-        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odomCallback) 
-        # self.odom_sub = rospy.Subscriber('/state_estimation', Odometry, self.odomCallback) 
+        if MODE == "SIL":
+            self.odom_sub = rospy.Subscriber(odom_SIL_topic, Odometry, self.odomCallback) 
+        elif MODE == "HIL":
+            self.odom_sub = rospy.Subscriber(odom_HIL_topic, Odometry, self.odomCallback) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
@@ -79,22 +81,22 @@ class ScanObject(py_trees.behaviour.Behaviour):
             relY = self.blackboard.goal[1] - self.eta[1]
             relAngle = self.eta[3] - np.arctan2(relY, relX)
 
-            if relAngle > -0.2 and relAngle < 0.0:
+            if relAngle > SCAN_HEADING_RANGE_LOWER and relAngle < SCAN_HEADING_RANGE_UPER:
                 self.desired = self.eta[3]
                 success = True
 
-        elif abs(self.err) < 0.2:
-            self.desired += np.pi / 2.0
+        elif abs(self.err) < SCAN_HEADING_ERROR:
+            self.desired += SCAN_HEADING_STEP
 
         task_msg = TaskMsg()
         task_msg.ids = "1"
         task_msg.name = self.tasks[0].name
         task_msg.desired = [self.desired]
-        task_msg.gain = [0.1]
-        task_msg.feedForward = [0.0]
+        task_msg.gain = [BASE_ORI_GAIN]
+        task_msg.feedForward = [BASE_ORI_FEEDFORWARD]
         self.task_publisher.publish(task_msg)
 
-        if success == True:
+        if success == True and self.blackboard.n_object < N_OBJECT:
             time.sleep(1.0)
             self.logger.debug("  %s [ScanObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
@@ -144,18 +146,17 @@ class ApproachBaseObject(py_trees.behaviour.Behaviour):
         ] 
 
         self.err = np.array([np.inf, np.inf])
-
         self.logger.debug("  %s [ApproachBaseObject::setup() SUCCESS]" % self.name)
 
     def initialise(self):
         self.logger.debug("  %s [ApproachBaseObject::initialise()]" % self.name)  
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
 
         # SUBSCRIBERS
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(1.0)
@@ -166,11 +167,11 @@ class ApproachBaseObject(py_trees.behaviour.Behaviour):
         task_msg.ids = "2"
         task_msg.name = self.tasks[0].name
         task_msg.desired = [self.blackboard.goal[0], self.blackboard.goal[1], 0.0]
-        task_msg.gain = [0.1, 0.1, 0.4]
-        task_msg.feedForward = [0.0, 0.0, 0.0]
+        task_msg.gain = [BASE_CONFIG_GAIN_X, BASE_CONFIG_GAIN_Y, BASE_CONFIG_GAIN_HEADING]
+        task_msg.feedForward = [BASE_CONFIG_FEEDFORWARD_X, BASE_CONFIG_FEEDFORWARD_Y, BASE_CONFIG_FEEDFORWARD_HEADING]
         self.task_publisher.publish(task_msg)
 
-        if  self.err[0] < 0.40:
+        if  abs(self.err[0]) < BASE_CONFIG_DIS_ERROR_FINISH and abs(self.err[1]) < BASE_CONFIG_HEADING_ERROR_FINISH:
             self.logger.debug("  %s [ApproachBaseObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
         else:
@@ -210,16 +211,16 @@ class ApproachManipulatorObject(py_trees.behaviour.Behaviour):
         self.logger.debug("  %s [ApproachManipulatorObject::initialise()]" % self.name)     
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
 
         # SUBSCRIBERS
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
 
-        self.desired_pos_z = -0.30
+        self.desired_pos_z = MANI_SAFE_HEIGHT
         self.err = np.array([np.inf, np.inf, np.inf])
         
     def update(self):
@@ -227,14 +228,14 @@ class ApproachManipulatorObject(py_trees.behaviour.Behaviour):
         task_msg.ids = "3"
         task_msg.name = self.tasks[-1].name
         task_msg.desired = [self.blackboard.goal[0], self.blackboard.goal[1], self.desired_pos_z]
-        task_msg.gain = [0.2, 0.2, 0.1]
-        task_msg.feedForward = [0.0, 0.0, 0.0]
+        task_msg.gain = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+        task_msg.feedForward = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
         self.task_publisher.publish(task_msg)
 
-        if np.linalg.norm(self.err) < 0.1 and self.desired_pos_z < -0.20:
-            self.desired_pos_z = -0.13
+        if np.linalg.norm(self.err) < EE_POS_ERROR_FINISH and self.desired_pos_z < -0.20:
+            self.desired_pos_z = MANI_PICK_HEIGHT
 
-        if np.linalg.norm(self.err) < 0.02 and self.desired_pos_z > -0.20: 
+        if np.linalg.norm(self.err) < EE_POS_ERROR_PICK_OBJ and self.desired_pos_z > -0.20: 
             self.logger.debug("  %s [ApproachManipulatorObject::Update() SUCCESS]" % self.name)
 
             return py_trees.common.Status.SUCCESS
@@ -269,10 +270,10 @@ class PickObject (py_trees.behaviour.Behaviour):
         
     def enable_suction(self):
         rospy.logwarn("Calling enable suction")
-        rospy.wait_for_service('/turtlebot/swiftpro/vacuum_gripper/set_pump')
+        rospy.wait_for_service(suction_service)
         path = []
         try:
-            enable_suction = rospy.ServiceProxy('/turtlebot/swiftpro/vacuum_gripper/set_pump', SetBool)
+            enable_suction = rospy.ServiceProxy(suction_service, SetBool)
             resp = enable_suction(True)
             
             return resp.success
@@ -306,16 +307,16 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
         self.logger.debug("  %s [HandleManipulatorObject::initialise()]" % self.name)     
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
 
         # SUBSCRIBERS
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
 
-        self.desired_pos_z = -0.35
+        self.desired_pos_z = MANI_SAFE_HEIGHT
         self.err = np.array([np.inf, np.inf, np.inf])
         
     def update(self):
@@ -323,11 +324,11 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
         task_msg.ids = "3"
         task_msg.name = self.tasks[-1].name
         task_msg.desired = [self.blackboard.goal[0], self.blackboard.goal[1], self.desired_pos_z]
-        task_msg.gain = [0.2, 0.2, 0.1]
-        task_msg.feedForward = [0.0, 0.0, 0.0]
+        task_msg.gain = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+        task_msg.feedForward = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
         self.task_publisher.publish(task_msg)
 
-        if np.linalg.norm(self.err) < 0.02:
+        if np.linalg.norm(self.err) < EE_POS_ERROR_PICK_OBJ:
             self.logger.debug("  %s [HandleManipulatorObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
         else:
@@ -341,8 +342,6 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
     def get_err(self, err):
         if len(err.data) == 3:
             self.err = np.array([err.data[0], err.data[1], err.data[2]])
-
-
 
 class LetObject (py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -368,10 +367,10 @@ class LetObject (py_trees.behaviour.Behaviour):
         
     def disable_suction(self):
         rospy.logwarn("Calling enable suction")
-        rospy.wait_for_service('/turtlebot/swiftpro/vacuum_gripper/set_pump')
+        rospy.wait_for_service(suction_service)
         path = []
         try:
-            enable_suction = rospy.ServiceProxy('/turtlebot/swiftpro/vacuum_gripper/set_pump', SetBool)
+            enable_suction = rospy.ServiceProxy(suction_service, SetBool)
             resp = enable_suction(False)
             
             return resp.success
@@ -397,11 +396,11 @@ class ApproachBasePlace(py_trees.behaviour.Behaviour):
         self.logger.debug("  %s [ApproachBasePlace::initialise()]" % self.name)  
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
 
         # SUBSCRIBERS
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
@@ -416,7 +415,7 @@ class ApproachBasePlace(py_trees.behaviour.Behaviour):
         task_msg.feedForward    = [0.0, 0.0, 0.0]
         self.task_publisher.publish(task_msg) 
 
-        if  self.err[0] < 0.35 and self.err[1] < 0.3:
+        if  abs(self.err[0]) < BASE_CONFIG_DIS_ERROR_FINISH and abs(self.err[1]) < BASE_CONFIG_HEADING_ERROR_FINISH:
             self.logger.debug("  %s [ApproachBaseObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
         else:
@@ -451,16 +450,16 @@ class ApproachManipulatorPlaceObject(py_trees.behaviour.Behaviour):
         self.logger.debug("  %s [ApproachManipulatorPlaceObject::initialise()]" % self.name)     
         # PUBLISHERS
         # Publisher for sending task to the TP control node
-        self.task_publisher = rospy.Publisher('/task', TaskMsg, queue_size=10)
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
 
         # SUBSCRIBERS
         #subscriber to task error 
-        self.task_err_sub = rospy.Subscriber('/error_topic', Float64MultiArray, self.get_err) 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
 
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
 
-        self.desired_pos_z = -0.13
+        self.desired_pos_z = MANI_PICK_HEIGHT
 
         self.err = np.array([np.inf, np.inf, np.inf])
         
@@ -468,9 +467,9 @@ class ApproachManipulatorPlaceObject(py_trees.behaviour.Behaviour):
         task_msg = TaskMsg()
         task_msg.ids = "3"
         task_msg.name = self.tasks[-1].name
-        task_msg.desired        = [3.0, 1.0, -0.13]
-        task_msg.gain           = [0.2, 0.2, 0.1]
-        task_msg.feedForward    = [0.0, 0.0, 0.0]
+        task_msg.desired        = [GOAL_PLACE_X, GOAL_PLACE_Y, MANI_PICK_HEIGHT]
+        task_msg.gain           = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+        task_msg.feedForward    = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
         self.task_publisher.publish(task_msg)
 
         if abs(self.err[2]) < 0.03:

@@ -28,6 +28,8 @@ class TP_controller:
 
         self.taskID = "0"
         self.robot              = MobileManipulator()
+        self.controller         = Controller(self.tasks, self.robot, np.ones((6,1)))
+
         
         # SUBCRIBE
         # Subcribe to get manipulator state
@@ -45,8 +47,8 @@ class TP_controller:
         self.EEposition_marker_pub   = rospy.Publisher(EEposition_marker_topic, Marker, queue_size=1)
         
         # Command Velocity Publishers
-        self.cmd_pub    = rospy.Publisher(self.cmd_vel_topic, Twist, queue_size=10)
-        self.dq_pub     = rospy.Publisher(self.cmd_dq_topic, Float64MultiArray, queue_size=10)
+        self.cmd_pub    = rospy.Publisher(cmd_vel_topic, Twist, queue_size=10)
+        self.dq_pub     = rospy.Publisher(cmd_dq_topic, Float64MultiArray, queue_size=10)
 
         self.err_pub    = rospy.Publisher(task_error_topic, Float64MultiArray, queue_size=10)
         
