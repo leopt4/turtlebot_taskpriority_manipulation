@@ -47,6 +47,7 @@ color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
 camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
 odom_SIL_topic          = "/odom"
 odom_HIL_topic          = "/state_estimation"
+aruco_topic             = "/aruco_pose"
 MODE                    = "SIL"
 # Aruco
 MAKER_SIZE              = 0.05
@@ -62,3 +63,15 @@ CAM_BASE_QX             = 0.500
 CAM_BASE_QY             = 0.500
 CAM_BASE_QZ             = 0.500
 CAM_BASE_QW             = 0.500
+
+
+# MOBILE MANIPULATOR
+MANI_BX                 = 0.0132        # [met]
+MANI_BZ                 = 0.1080        # [met]
+MANI_D1                 = 0.1420        # [met]
+MANI_D2                 = 0.1588        # [met]
+MANI_MZ                 = 0.0722        # [met]
+MANI_MX                 = 0.0565        # [met]
+MANI_ALPHA_SIL          = -np.pi/2.0    # [rad]
+MANI_ALPHA_HIL          = np.pi/2.0     # [rad]
+

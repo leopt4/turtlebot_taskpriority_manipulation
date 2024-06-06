@@ -1,19 +1,23 @@
 from .common import *
 import math
 import numpy as np
+from config import *
 
 class ManipulatorParams:
     def __init__(self) -> None:
         self.revolute = [True, True, True, True]
         self.dof = len(self.revolute)     
-        self.bx = 0.0132        # [met]
-        self.bz = 0.108         # [met]
-        self.d1 = 0.142         # [met]
-        self.d2 = 0.1588        # [met]
-        self.mz = 0.0722        # [met]
-        self.mx = 0.0565        # [met]
+        self.bx = MANI_BX       
+        self.bz = MANI_BZ         
+        self.d1 = MANI_D1        
+        self.d2 = MANI_D2       
+        self.mz = MANI_MZ     
+        self.mx = MANI_MX        
         
-        self.alpha = -np.pi/2.0
+        if MODE == "SIL":
+            self.alpha = MANI_ALPHA_SIL
+        elif MODE == "HIL":
+            self.alpha = MANI_ALPHA_HIL
 
 class MobileBaseParams:
     def __init__(self) -> None:
