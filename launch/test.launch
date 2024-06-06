@@ -2,7 +2,10 @@
     <!-- <node pkg="turtlebot_taskpriority_manipulation" type="TP_control_node.py" name="TP_control_node">
     </node> -->
     
-    <node pkg="turtlebot_taskpriority_manipulation" type="aruco_pose_detector_node.py" name="aruco_pose_detector_node">
+    <!-- <node pkg="turtlebot_taskpriority_manipulation" type="aruco_pose_detector_node.py" name="aruco_pose_detector_node">
         <param name="mode" value="SIL"/>
-    </node>
+    </node> -->
+    <param name="~mode" type="string" value="SIL"/>
+    <node pkg="turtlebot_taskpriority_manipulation" type="EKF_node.py" name="EKF_node"/>
+
 </launch>
