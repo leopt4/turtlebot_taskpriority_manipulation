@@ -1,44 +1,7 @@
 import numpy as np
 
-limit_joint1_upper =  1.571
-limit_joint1_lower = -1.571
-limit_joint2_upper =  0.050
-limit_joint2_lower = -1.571
-limit_joint3_upper =  0.050
-limit_joint3_lower = -1.571
-limit_joint4_upper =  1.571
-limit_joint4_lower = -1.571
+MODE                    = "SIL"
 
-limit_joint_threshold_activate      = 0.05
-limit_joint_threshold_deactivate    = 0.08
-
-# Task hierarchy definition
-limit_range_joint1   = np.array([limit_joint1_lower, limit_joint1_upper]).reshape(1,2)
-limit_range_joint2   = np.array([limit_joint2_lower, limit_joint2_upper]).reshape(1,2)
-limit_range_joint3   = np.array([limit_joint3_lower, limit_joint3_upper]).reshape(1,2)
-limit_range_joint4   = np.array([limit_joint4_lower, limit_joint4_upper]).reshape(1,2)
-
-threshold_joint      = np.array([limit_joint_threshold_activate, limit_joint_threshold_deactivate]).reshape(2,1)
-
-BASE_CONFIG_WEIGHT_BASE_ROTATE      = 10.000
-BASE_CONFIG_WEIGHT_BASE_TRANSLATE   = 50.000
-BASE_CONFIG_WEIGHT_JOINT_1           = 0.500
-BASE_CONFIG_WEIGHT_JOINT_2           = 1.000
-BASE_CONFIG_WEIGHT_JOINT_3           = 1.000
-BASE_CONFIG_WEIGHT_JOINT_4           = 1.000
-
-EE_POS_WEIGHT_BASE_ROTATE      = 10.0
-EE_POS_WEIGHT_BASE_TRANSLATE   = 150.0
-EE_POS_WEIGHT_JOINT_1          = 0.5
-EE_POS_WEIGHT_JOINT_2           = 1.0
-EE_POS_WEIGHT_JOINT_3           = 1.0
-EE_POS_WEIGHT_JOINT_4           = 1.0
-
-# joint_state_topic  = "/turtlebot/joint_states"
-# aruco_pose_topic   = "/aruco_pose"
-# task_topic         = "None"
-# cmd_vel_topic      = "/cmd_vel"
-# cmd_dq_topic       = "/turtlebot/swiftpro/joint_velocity_controller/command"
 
 FRAME_MAP               = "map"
 FRAME_BASE_FOOTPRINT    = "turtlebot/kobuki/base_footprint"
@@ -62,7 +25,6 @@ EEposition_marker_topic = '~EEposition_point_marker'
 point_marker_topic      = '~desierd_point_marker'
 task_error_topic        = "/error_topic"
 
-MODE                    = "SIL"
 # Aruco
 MAKER_SIZE              = 0.05
 BOX_WIDTH               = 0.07
@@ -89,20 +51,39 @@ MANI_MX                 = 0.0565        # [met]
 MANI_ALPHA_SIL          = -np.pi/2.0    # [rad]
 MANI_ALPHA_HIL          = np.pi/2.0     # [rad]
 
+limit_joint1_upper      =  1.571
+limit_joint1_lower      = -1.571
+limit_joint2_upper      =  0.050
+limit_joint2_lower      = -1.571
+limit_joint3_upper      =  0.050
+limit_joint3_lower      = -1.571
+limit_joint4_upper      =  1.571
+limit_joint4_lower      = -1.571
+
+limit_joint_threshold_activate      = 0.05
+limit_joint_threshold_deactivate    = 0.08
+
+# Joint limit
+limit_range_joint1   = np.array([limit_joint1_lower, limit_joint1_upper]).reshape(1,2)
+limit_range_joint2   = np.array([limit_joint2_lower, limit_joint2_upper]).reshape(1,2)
+limit_range_joint3   = np.array([limit_joint3_lower, limit_joint3_upper]).reshape(1,2)
+limit_range_joint4   = np.array([limit_joint4_lower, limit_joint4_upper]).reshape(1,2)
+
+threshold_joint      = np.array([limit_joint_threshold_activate, limit_joint_threshold_deactivate]).reshape(2,1)
 
 # BEHAVIOR TREE
-SCAN_INIT_HEADING       = -np.pi/2.0 
-SCAN_HEADING_STEP       = np.pi/2.0
-SCAN_HEADING_RANGE_LOWER = -0.2         # [rad]
-SCAN_HEADING_RANGE_UPER = 0.0           # [rad]
-SCAN_HEADING_ERROR      = 0.2           # [rad]
+SCAN_INIT_HEADING                   = -np.pi/2.0 
+SCAN_HEADING_STEP                   = np.pi/2.0
+SCAN_HEADING_RANGE_LOWER            = -0.2          # [rad]
+SCAN_HEADING_RANGE_UPER             = 0.0           # [rad]
+SCAN_HEADING_ERROR                  = 0.2           # [rad]
 
-MANI_SAFE_HEIGHT        = -0.35         # [met]
-MANI_PICK_HEIGHT        = -0.13         # [met]
+MANI_SAFE_HEIGHT                    = -0.35         # [met]
+MANI_PICK_HEIGHT                    = -0.13         # [met]
 
 # BASE ORIENTATION CONTROLLER CONFIG
-BASE_ORI_GAIN           = 0.1
-BASE_ORI_FEEDFORWARD    = 0.0
+BASE_ORI_GAIN                       = 0.1
+BASE_ORI_FEEDFORWARD                = 0.0
 
 # BASE CONFIGURATION CONTROLLER CONFIG
 BASE_CONFIG_GAIN_X                  = 0.1
@@ -114,6 +95,13 @@ BASE_CONFIG_FEEDFORWARD_HEADING     = 0.0
 BASE_CONFIG_DIS_ERROR_FINISH        = 0.4
 BASE_CONFIG_HEADING_ERROR_FINISH    = 0.3
 
+BASE_CONFIG_WEIGHT_BASE_ROTATE      = 10.000
+BASE_CONFIG_WEIGHT_BASE_TRANSLATE   = 50.000
+BASE_CONFIG_WEIGHT_JOINT_1          = 0.500
+BASE_CONFIG_WEIGHT_JOINT_2          = 1.000
+BASE_CONFIG_WEIGHT_JOINT_3          = 1.000
+BASE_CONFIG_WEIGHT_JOINT_4          = 1.000
+
 # EE POSITION CONTROLLER CONFIG
 EE_POS_GAIN_X                       = 0.2
 EE_POS_GAIN_Y                       = 0.2
@@ -123,6 +111,13 @@ EE_POS_FEEDFORWARD_Y                = 0.0
 EE_POS_FEEDFORWARD_Z                = 0.0
 EE_POS_ERROR_FINISH                 = 0.1
 EE_POS_ERROR_PICK_OBJ               = 0.02
+
+EE_POS_WEIGHT_BASE_ROTATE           = 10.0
+EE_POS_WEIGHT_BASE_TRANSLATE        = 150.0
+EE_POS_WEIGHT_JOINT_1               = 0.5
+EE_POS_WEIGHT_JOINT_2               = 1.0
+EE_POS_WEIGHT_JOINT_3               = 1.0
+EE_POS_WEIGHT_JOINT_4               = 1.0
 
 # GOAL PLACE
 GOAL_PLACE_X                        = 3.0
