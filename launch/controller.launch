@@ -1,10 +1,5 @@
 <launch>
-    <!-- Import parameters from YAML file -->
-    <rosparam command="load" file="$(find turtlebot_taskpriority_manipulation)/config/params.yaml"/>
-
-    <!-- Run Controller -->
-    <node pkg="turtlebot_taskpriority_manipulation" type="TP_control_node.py" name="TP_control_node">
-    </node>
-
-
+    <node pkg="turtlebot_taskpriority_manipulation" type="TP_control_node.py" name="TP_control_node"/>
+    
+    <node pkg="turtlebot_taskpriority_manipulation" type="behaviour_tree_node.py" name="behaviour_tree_node"/>
 </launch>

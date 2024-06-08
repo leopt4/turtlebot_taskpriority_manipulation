@@ -7,6 +7,7 @@ FRAME_MAP               = "map"
 FRAME_BASE_FOOTPRINT    = "turtlebot/kobuki/base_footprint"
 FRAME_EE                = "EE"
 
+ground_truth_topic      = '/turtlebot/kobuki/odom_ground_truth'
 color_camera_SIL_topic  = "/turtlebot/kobuki/realsense/color/image_color"
 color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
 camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
