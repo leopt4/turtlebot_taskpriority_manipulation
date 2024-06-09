@@ -76,6 +76,7 @@ class ScanObject(py_trees.behaviour.Behaviour):
 
     def update(self):
         success = False
+        # success = True
         if self.blackboard.detect_goal == True:
             relX = self.blackboard.goal[0] - self.eta[0]
             relY = self.blackboard.goal[1] - self.eta[1]
@@ -282,14 +283,70 @@ class PickObject (py_trees.behaviour.Behaviour):
             print(f"Service call failed: {e}")
             return False
 
+# class HandleManipulatorObject(py_trees.behaviour.Behaviour):
+#     def __init__(self, name):
+#         super(HandleManipulatorObject, self).__init__(name)
+#         self.blackboard = self.attach_blackboard_client(name=self.name)
+#         self.blackboard.register_key(
+#             "goal", access=py_trees.common.Access.WRITE)
+#         self.blackboard.register_key(
+#             "goal", access=py_trees.common.Access.READ)
+
+#     def setup(self):
+#         self.logger.debug("  %s [HandleManipulatorObject::setup()]" % self.name)
+#         self.tasks = [
+#             Limit2D("Manipulator Joint 1 Limitation", limit_range_joint1, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 1),
+#             Limit2D("Manipulator Joint 2 Limitation", limit_range_joint2, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 2),
+#             Limit2D("Manipulator Joint 3 Limitation", limit_range_joint3, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 3),
+#             Limit2D("Manipulator Joint 4 Limitation", limit_range_joint4, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 4), 
+#             EEPosition3D("End-effector position", np.array([0.0, 0.0, 0.0]).reshape(3,1), np.zeros((3,1)), np.zeros((3,3)))
+#         ] 
+
+#         self.logger.debug("  %s [HandleManipulatorObject::setup() SUCCESS]" % self.name)
+
+#     def initialise(self):
+#         self.logger.debug("  %s [HandleManipulatorObject::initialise()]" % self.name)     
+#         # PUBLISHERS
+#         # Publisher for sending task to the TP control node
+#         self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
+
+#         # SUBSCRIBERS
+#         #subscriber to task error 
+#         self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
+
+#         # Wait 0.2s to init pub and sub
+#         time.sleep(0.2)
+
+#         self.desired_pos_z = MANI_SAFE_HEIGHT
+#         self.err = np.array([np.inf, np.inf, np.inf])
+        
+#     def update(self):
+#         task_msg = TaskMsg()
+#         task_msg.ids = "3"
+#         task_msg.name = self.tasks[-1].name
+#         task_msg.desired = [self.blackboard.goal[0], self.blackboard.goal[1], self.desired_pos_z]
+#         task_msg.gain = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+#         task_msg.feedForward = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
+#         self.task_publisher.publish(task_msg)
+
+#         if np.linalg.norm(self.err) < EE_POS_ERROR_PICK_OBJ:
+#             self.logger.debug("  %s [HandleManipulatorObject::Update() SUCCESS]" % self.name)
+#             return py_trees.common.Status.SUCCESS
+#         else:
+#             self.logger.debug("  %s [HandleManipulatorObject::Update() RUNNING]" % self.name)
+#             return py_trees.common.Status.RUNNING
+
+#     def terminate(self, new_status):
+#         self.logger.debug("  %s [HandleManipulatorObject::terminate().terminate()][%s->%s]" %
+#                           (self.name, self.status, new_status))
+        
+#     def get_err(self, err):
+#         if len(err.data) == 3:
+#             self.err = np.array([err.data[0], err.data[1], err.data[2]])
+
 class HandleManipulatorObject(py_trees.behaviour.Behaviour):
     def __init__(self, name):
         super(HandleManipulatorObject, self).__init__(name)
-        self.blackboard = self.attach_blackboard_client(name=self.name)
-        self.blackboard.register_key(
-            "goal", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(
-            "goal", access=py_trees.common.Access.READ)
 
     def setup(self):
         self.logger.debug("  %s [HandleManipulatorObject::setup()]" % self.name)
@@ -298,7 +355,9 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
             Limit2D("Manipulator Joint 2 Limitation", limit_range_joint2, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 2),
             Limit2D("Manipulator Joint 3 Limitation", limit_range_joint3, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 3),
             Limit2D("Manipulator Joint 4 Limitation", limit_range_joint4, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 4), 
-            EEPosition3D("End-effector position", np.array([0.0, 0.0, 0.0]).reshape(3,1), np.zeros((3,1)), np.zeros((3,3)))
+            JointPosition("Joint position", 3, np.array([0.0]).reshape(1,1), np.zeros((1,1)), np.zeros((1,1))),
+            JointPosition("Joint position", 2, np.array([0.0]).reshape(1,1), np.zeros((1,1)), np.zeros((1,1))),
+            JointPosition("Joint position", 1, np.array([-np.pi/2.0]).reshape(1,1), np.zeros((1,1)), np.zeros((1,1)))
         ] 
 
         self.logger.debug("  %s [HandleManipulatorObject::setup() SUCCESS]" % self.name)
@@ -316,19 +375,18 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
         # Wait 0.2s to init pub and sub
         time.sleep(0.2)
 
-        self.desired_pos_z = MANI_SAFE_HEIGHT
         self.err = np.array([np.inf, np.inf, np.inf])
         
     def update(self):
         task_msg = TaskMsg()
-        task_msg.ids = "3"
+        task_msg.ids = "4"
         task_msg.name = self.tasks[-1].name
-        task_msg.desired = [self.blackboard.goal[0], self.blackboard.goal[1], self.desired_pos_z]
-        task_msg.gain = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
-        task_msg.feedForward = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
+        task_msg.desired = [self.tasks[-1].getDesired(), self.tasks[-2].getDesired(), self.tasks[-3].getDesired()]
+        task_msg.gain = [JOINT_POS_GAIN_1, JOINT_POS_GAIN_2, JOINT_POS_GAIN_3]
+        task_msg.feedForward = [JOINT_POS_FEEDFORWARD_1, JOINT_POS_FEEDFORWARD_2, JOINT_POS_FEEDFORWARD_3]
         self.task_publisher.publish(task_msg)
 
-        if np.linalg.norm(self.err) < EE_POS_ERROR_PICK_OBJ:
+        if abs(self.err[0]) < JOINT_POS_ERROR_FINISH and abs(self.err[1]) < JOINT_POS_ERROR_FINISH and abs(self.err[2]) < JOINT_POS_ERROR_FINISH:
             self.logger.debug("  %s [HandleManipulatorObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
         else:
@@ -342,6 +400,7 @@ class HandleManipulatorObject(py_trees.behaviour.Behaviour):
     def get_err(self, err):
         if len(err.data) == 3:
             self.err = np.array([err.data[0], err.data[1], err.data[2]])
+
 
 class LetObject (py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -410,9 +469,9 @@ class ApproachBasePlace(py_trees.behaviour.Behaviour):
         task_msg = TaskMsg()
         task_msg.ids = "2"
         task_msg.name = self.tasks[0].name
-        task_msg.desired        = [3.0, 1.0]
-        task_msg.gain           = [0.1, 0.1, 0.4]
-        task_msg.feedForward    = [0.0, 0.0, 0.0]
+        task_msg.desired        = [GOAL_PLACE_X, GOAL_PLACE_Y]
+        task_msg.gain           = [BASE_CONFIG_GAIN_X, BASE_CONFIG_GAIN_Y, BASE_CONFIG_GAIN_HEADING]
+        task_msg.feedForward    = [BASE_CONFIG_FEEDFORWARD_X, BASE_CONFIG_FEEDFORWARD_Y, BASE_CONFIG_FEEDFORWARD_HEADING]
         self.task_publisher.publish(task_msg) 
 
         if  abs(self.err[0]) < BASE_CONFIG_DIS_ERROR_FINISH and abs(self.err[1]) < BASE_CONFIG_HEADING_ERROR_FINISH:
@@ -467,12 +526,12 @@ class ApproachManipulatorPlaceObject(py_trees.behaviour.Behaviour):
         task_msg = TaskMsg()
         task_msg.ids = "3"
         task_msg.name = self.tasks[-1].name
-        task_msg.desired        = [GOAL_PLACE_X, GOAL_PLACE_Y, MANI_PICK_HEIGHT]
-        task_msg.gain           = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+        task_msg.desired        = [GOAL_PLACE_X, GOAL_PLACE_Y, MANI_PLACE_HEIGHT]
+        task_msg.gain           = [EE_POS_GAIN_X, EE_POS_GAIN_Y, 0.06]
         task_msg.feedForward    = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
         self.task_publisher.publish(task_msg)
 
-        if abs(self.err[2]) < 0.03:
+        if abs(self.err[2]) < EE_POS_ERROR_PICK_OBJ:
             self.logger.debug("  %s [ApproachManipulatorPlaceObject::Update() SUCCESS]" % self.name)
             return py_trees.common.Status.SUCCESS
         else:
@@ -481,6 +540,62 @@ class ApproachManipulatorPlaceObject(py_trees.behaviour.Behaviour):
 
     def terminate(self, new_status):
         self.logger.debug("  %s [ApproachManipulatorPlaceObject::terminate().terminate()][%s->%s]" %
+                          (self.name, self.status, new_status))
+        
+    def get_err(self, err):
+        if len(err.data) == 3:
+            self.err = np.array([err.data[0], err.data[1], err.data[2]])
+
+class HandleManipulatorSafe(py_trees.behaviour.Behaviour):
+    def __init__(self, name):
+        super(HandleManipulatorSafe, self).__init__(name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self):
+        self.logger.debug("  %s [HandleManipulatorSafe::setup()]" % self.name)
+        self.tasks = [
+            Limit2D("Manipulator Joint 1 Limitation", limit_range_joint1, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 1),
+            Limit2D("Manipulator Joint 2 Limitation", limit_range_joint2, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 2),
+            Limit2D("Manipulator Joint 3 Limitation", limit_range_joint3, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 3),
+            Limit2D("Manipulator Joint 4 Limitation", limit_range_joint4, threshold_joint, np.zeros((1,1)), np.zeros((1,1)), 4), 
+            EEPosition3D("End-effector position", np.array([0.0, 0.0, 0.0]).reshape(3,1), np.zeros((3,1)), np.zeros((3,3)))
+        ] 
+
+        self.logger.debug("  %s [HandleManipulatorSafe::setup() SUCCESS]" % self.name)
+
+    def initialise(self):
+        self.logger.debug("  %s [HandleManipulatorObject::initialise()]" % self.name)     
+        # PUBLISHERS
+        # Publisher for sending task to the TP control node
+        self.task_publisher = rospy.Publisher(task_topic, TaskMsg, queue_size=10)
+
+        # SUBSCRIBERS
+        #subscriber to task error 
+        self.task_err_sub = rospy.Subscriber(task_error_topic, Float64MultiArray, self.get_err) 
+
+        # Wait 0.2s to init pub and sub
+        time.sleep(0.2)
+
+        self.err = np.array([np.inf, np.inf, np.inf])
+        
+    def update(self):
+        task_msg = TaskMsg()
+        task_msg.ids = "3"
+        task_msg.name = self.tasks[-1].name
+        task_msg.desired = [GOAL_PLACE_X, GOAL_PLACE_Y, MANI_SAFE_HEIGHT]
+        task_msg.gain = [EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z]
+        task_msg.feedForward = [EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_Z]
+        self.task_publisher.publish(task_msg)
+
+        if np.linalg.norm(self.err) < EE_POS_ERROR_PICK_OBJ:
+            self.logger.debug("  %s [HandleManipulatorSafe::Update() SUCCESS]" % self.name)
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.logger.debug("  %s [HandleManipulatorSafe::Update() RUNNING]" % self.name)
+            return py_trees.common.Status.RUNNING
+
+    def terminate(self, new_status):
+        self.logger.debug("  %s [HandleManipulatorSafe::terminate().terminate()][%s->%s]" %
                           (self.name, self.status, new_status))
         
     def get_err(self, err):
@@ -518,6 +633,8 @@ def create_tree():
 
     let_object = LetObject(name="let_object")
 
+    finish_object = HandleManipulatorSafe(name="finish_object")
+
     root = py_trees.composites.Sequence(name="Life", memory=True)    
     root.add_children([n_object_lt_1,
                        scan_object,
@@ -527,8 +644,9 @@ def create_tree():
                        handle_manipulator_object, 
                        approach_base_to_place, 
                        approach_manipulator_to_place_object, 
-                       let_object])
-    # py_trees.display.render_dot_tree(root)
+                       let_object,
+                       finish_object])
+    
     return root
 
 def run(it=200):
@@ -554,4 +672,5 @@ if __name__ == "__main__":
 
     # Create behavior tree
     root = create_tree()
+    # py_trees.display.render_dot_tree(root)
     run()
