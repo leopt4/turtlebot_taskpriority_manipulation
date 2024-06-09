@@ -12,10 +12,12 @@ color_camera_SIL_topic  = "/turtlebot/kobuki/realsense/color/image_color"
 color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
 camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
 odom_SIL_topic          = "/odom"
-odom_HIL_topic          = "/state_estimation"
+odom_HIL_topic          = "/odom"
 aruco_pose_topic        = "/aruco_pose"
 task_topic              = "/task"
+cmd_topic               = "/cmd"
 rviz_goal_topic         = "/move_base_simple/goal"
+goal_topic              = "/goal"
 
 suction_service         = '/turtlebot/swiftpro/vacuum_gripper/set_pump'
 
@@ -80,8 +82,8 @@ SCAN_HEADING_RANGE_UPER             = 0.0           # [rad]
 SCAN_HEADING_ERROR                  = 0.2           # [rad]
 
 MANI_SAFE_HEIGHT                    = -0.35         # [met]
-MANI_PICK_HEIGHT                    = -0.13         # [met]
-
+MANI_PICK_HEIGHT                    = -0.13             
+MANI_PLACE_HEIGHT                   = -0.14         # [met]
 # BASE ORIENTATION CONTROLLER CONFIG
 BASE_ORI_GAIN                       = 0.1
 BASE_ORI_FEEDFORWARD                = 0.0
@@ -89,12 +91,12 @@ BASE_ORI_FEEDFORWARD                = 0.0
 # BASE CONFIGURATION CONTROLLER CONFIG
 BASE_CONFIG_GAIN_X                  = 0.1
 BASE_CONFIG_GAIN_Y                  = 0.1
-BASE_CONFIG_GAIN_HEADING            = 0.4
+BASE_CONFIG_GAIN_HEADING            = 0.8
 BASE_CONFIG_FEEDFORWARD_X           = 0.0
 BASE_CONFIG_FEEDFORWARD_Y           = 0.0
 BASE_CONFIG_FEEDFORWARD_HEADING     = 0.0
 BASE_CONFIG_DIS_ERROR_FINISH        = 0.4
-BASE_CONFIG_HEADING_ERROR_FINISH    = 0.3
+BASE_CONFIG_HEADING_ERROR_FINISH    = 0.4
 
 BASE_CONFIG_WEIGHT_BASE_ROTATE      = 10.000
 BASE_CONFIG_WEIGHT_BASE_TRANSLATE   = 50.000
@@ -120,8 +122,18 @@ EE_POS_WEIGHT_JOINT_2               = 1.0
 EE_POS_WEIGHT_JOINT_3               = 1.0
 EE_POS_WEIGHT_JOINT_4               = 1.0
 
+# EE POSITION CONTROLLER CONFIG
+JOINT_POS_GAIN_1                    = 0.2
+JOINT_POS_GAIN_2                    = 0.2
+JOINT_POS_GAIN_3                    = 0.2
+JOINT_POS_FEEDFORWARD_1             = 0.0
+JOINT_POS_FEEDFORWARD_2             = 0.0
+JOINT_POS_FEEDFORWARD_3             = 0.0
+JOINT_POS_ERROR_FINISH              = 0.1           # [rad]
+
+
 # GOAL PLACE
-GOAL_PLACE_X                        = 3.0
+GOAL_PLACE_X                        = 5.0
 GOAL_PLACE_Y                        = 1.0
 
 # TASK
