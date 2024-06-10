@@ -283,9 +283,37 @@ class MMConfiguration(Task):
             np.block([[self.err_pos], [self.err_ori]]).reshape(self.task_dim, 1)
         ) + self.getFeedForward().reshape(self.task_dim, 1)
 
-
     def track_err(self):
         self.err_hist.append(np.linalg.norm(self.getError()))
+
+
+"""
+    Subclass of Task, representing the joint position task.
+"""
+class JointPosition(Task):
+    def __init__(self, name, desired_joint_number, desired, feedforward, gain):
+        super().__init__(name, desired, feedforward, gain)
+        self.desired_joint_number = desired_joint_number
+    
+    def update(self, robot):
+        DoF     = robot.getDOF()
+        # Update Jacobean matrix - task Jacobian
+        self.J = np.array(
+            [
+                1 if i == self.desired_joint_number + 1 else 0
+                for i in range(DoF)
+            ]
+        ).reshape((1, DoF))
+
+        self.err = self.K * (
+            np.array(
+                [self.getDesired() - robot.getJointPos(self.desired_joint_number)]
+            ).reshape((1, 1))
+        ) + self.FeedForward.reshape(1, 1)
+
+        self.error_task = self.err
+
+
 
 '''
     Subclass of Task, representing joint limits (inequality task).
