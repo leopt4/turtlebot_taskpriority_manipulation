@@ -13,11 +13,16 @@ from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 import tf
 from config import *
+from collections import deque
 
 
 class ArucoDetection:
     def __init__(self):
         
+        self.trans_hist     = deque(maxlen=50)
+        self.rot_hist       = deque(maxlen=50)
+        self.time_hist      = deque(maxlen=50)
+
         if MODE == "SIL":
             #SUBSCRIBERS    
             #subscribe to camera image for the aruco detection
@@ -43,6 +48,8 @@ class ArucoDetection:
         #PUBLISHERS 
         #publish pose of aruco marker in the world frame 
         self.marker_pub = rospy.Publisher(aruco_pose_topic, PoseStamped, queue_size=1) 
+        
+        self.wpt_pub = rospy.Publisher(wpt_topic, PoseStamped, queue_size=1) 
         
         #define aruco dictionary and parameters 
         if MODE == "SIL":
@@ -74,7 +81,9 @@ class ArucoDetection:
         self.eta = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, yaw]).reshape(-1,1)
         self.robot_orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
         self.robot_translation = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
-    
+        self.trans_hist.append(np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]))
+        self.rot_hist.append(np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w]))
+        self.time_hist.append(odom.header.stamp)
     #transform the obtained image to cv2 format to be used by the aruco detector
     def imageToCV(self, image): 
         """
@@ -85,7 +94,9 @@ class ArucoDetection:
         """
         try:
             cv_image = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough').copy()
-            self.publishAruco(cv_image)
+            image_stamp = image.header.stamp
+            if len(self.time_hist) > 10:
+                self.publishAruco(cv_image, image_stamp)
         except CvBridgeError as err:
             print(err)
             
@@ -102,7 +113,7 @@ class ArucoDetection:
         self.dist_coeffs    = np.array(data.D) 
         self.camera_info_sub.unregister() 
         
-    def publishAruco(self, cv_image): 
+    def publishAruco(self, cv_image, image_stamp): 
         """
         detect the aruco marker in the image obtained from the rgb camera
         Args:
@@ -119,11 +130,21 @@ class ArucoDetection:
             
             for i in range(len(ids)): #for each marker detected
                 rvec_i = rvec[i,:,:].reshape(3,1)
-                tvec_i = tvec[i,:,:].reshape(3,1)
-                # Move to center of the box
-                tvec_i[2] += BOX_LENGTH / 2.0
 
-                object_pose_world = self.compute_object_pose_in_world(rvec_i, tvec_i)
+                a = tvec[i,:,:].reshape(3,1)
+                tvec_i = np.zeros((3,1))
+                tvec_wp_i = np.zeros((3,1))
+                # Move to center of the box
+                tvec_i[0] = a[0]
+                tvec_i[1] = a[1]
+                tvec_i[2] = a[2] + BOX_LENGTH / 2.0
+
+                tvec_wp_i[0] = a[0]
+                tvec_wp_i[1] = a[1]
+                tvec_wp_i[2] = a[2] - WPT_THRESHOLD
+
+                object_pose_world = self.compute_object_pose_in_world(rvec_i, tvec_i, image_stamp)
+                waypoint_world = self.compute_object_pose_in_world(rvec_i, tvec_wp_i, image_stamp)
 
                 # Extract translation and rotation (quaternion) from the object's pose in the world frame
                 object_translation_world = object_pose_world[:3, 3]
@@ -141,13 +162,32 @@ class ArucoDetection:
                 aruco_position.pose.orientation.z = object_quaternion_world[2]
                 aruco_position.pose.orientation.w = object_quaternion_world[3]
                 self.marker_pub.publish(aruco_position)
+
+
+
+                # Extract translation and rotation (quaternion) from the object's pose in the world frame
+                wpt_translation_world = waypoint_world[:3, 3]
+  
+                wpt_quaternion_world = tf.transformations.quaternion_from_matrix(waypoint_world)
+
+                #################### POSE PUBLISHER OF ARUCO IN WORLD NED FRAME #############################
+                wpt_position = PoseStamped()
+                wpt_position.header.frame_id = FRAME_MAP
+                wpt_position.pose.position.x = wpt_translation_world[0]
+                wpt_position.pose.position.y = wpt_translation_world[1]
+                wpt_position.pose.position.z = wpt_translation_world[2]
+                wpt_position.pose.orientation.x = wpt_quaternion_world[0]
+                wpt_position.pose.orientation.y = wpt_quaternion_world[1]
+                wpt_position.pose.orientation.z = wpt_quaternion_world[2]
+                wpt_position.pose.orientation.w = wpt_quaternion_world[3]
+                self.wpt_pub.publish(wpt_position)
             
             
         else :
             print("No Aruco detected")
             
     # Step 3: Compute the object's position in the world frame
-    def compute_object_pose_in_world(self, rvec, tvec):
+    def compute_object_pose_in_world(self, rvec, tvec, image_stamp):
         # Get transformation matrix object in camera frame
         rotation_matrix_object_in_camera = rvec_to_rot_matrix(rvec)
         object_in_camera = create_homogeneous_transform(rotation_matrix_object_in_camera, tvec)
@@ -158,13 +198,15 @@ class ArucoDetection:
         camera_in_robot[:3, :3] = camera_rot_matrix[:3, :3]
         camera_in_robot[0:3, 3] = np.array([CAM_BASE_X, CAM_BASE_Y, CAM_BASE_Z])
 
+
+        closest_idx = find_closest_timestamp(self.time_hist, self.trans_hist, self.rot_hist, image_stamp)
         # Get transformation matric robot base footprint in the map frame
         # Convert quaternion to rotation matrix
-        robot_rot_matrix = tf.transformations.quaternion_matrix(self.robot_orientation)
+        robot_rot_matrix = tf.transformations.quaternion_matrix(self.rot_hist[closest_idx])
         # Create homogeneous transformation matrix for robot in the world frame
         robot_in_world = np.eye(4)
         robot_in_world[:3, :3] = robot_rot_matrix[:3, :3]
-        robot_in_world[0:3, 3] = self.robot_translation
+        robot_in_world[0:3, 3] = self.trans_hist[closest_idx]
 
         # Compute the object's pose in the world frame
         object_in_robot = np.dot(camera_in_robot, object_in_camera)
@@ -183,6 +225,22 @@ def create_homogeneous_transform(rotation_matrix, translation_vector):
     transformation_matrix[:3, :3] = rotation_matrix
     transformation_matrix[:3, 3] = translation_vector.T
     return transformation_matrix
+
+# Function to find the closest timestamp in the deque to the new timestamp
+def find_closest_timestamp(time_hist, trans_hist, rot_hist, imStamp):
+    min_difference = rospy.Duration.from_sec(1e6)
+    idx = 0
+    closest_index = -1
+    
+    for ts in time_hist:
+        difference = abs(ts - imStamp)
+        if difference < min_difference:
+            min_difference = difference
+            closest_index = idx
+        idx += 1
+
+    print(closest_index)
+    return closest_index
     
 if __name__ == "__main__":
 
