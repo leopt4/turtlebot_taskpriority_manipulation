@@ -1,0 +1,5 @@
+<launch>
+    <arg name="mode" default="HIL" />
+    
+    <node pkg="turtlebot_taskpriority_manipulation" type="integration_task_node.py" name="behaviour_tree_node"/>
+</launch>

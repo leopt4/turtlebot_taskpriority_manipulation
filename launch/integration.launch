@@ -1,0 +1,12 @@
+<launch>
+    <arg name="mode" default="HIL" />
+    
+    <!-- <node pkg="turtlebot_taskpriority_manipulation" type="integration_task_node.py" name="behaviour_tree_node"/> -->
+
+
+    <node pkg="turtlebot_taskpriority_manipulation" type="TP_control_node.py" name="TP_control_node"/>
+
+    <include file="$(find local_planner)/launch/local_planner.launch">
+        <param name="kMode" value="$(arg mode)" />
+    </include>
+</launch>
