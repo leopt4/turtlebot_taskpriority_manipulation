@@ -7,6 +7,7 @@ from utils.controller import *
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped
 import math
@@ -44,6 +45,25 @@ class TP_controller:
         # self.controller         = Controller(self.tasks, self.robot, self.weight_matrix)
         # self.taskID = "2"
 
+        # task_desired    = np.array([0.2, 0.1, -0.3]).reshape(3,1)
+        # task_gain       = np.diag([EE_POS_GAIN_X, EE_POS_GAIN_Y, EE_POS_GAIN_Z])
+        # task_feedForward= np.array([EE_POS_FEEDFORWARD_X, EE_POS_FEEDFORWARD_Y, EE_POS_FEEDFORWARD_X]).reshape(3,1)
+        # self.weight_matrix           = np.diag([EE_POS_WEIGHT_BASE_ROTATE,
+        #                                         EE_POS_WEIGHT_BASE_TRANSLATE, 
+        #                                         EE_POS_WEIGHT_JOINT_1, 
+        #                                         EE_POS_WEIGHT_JOINT_2,
+        #                                         EE_POS_WEIGHT_JOINT_3,
+        #                                         EE_POS_WEIGHT_JOINT_4])
+        # self.tasks = [
+        #     Limit2D("Manipulator Joint 1 Limitation", limit_range_joint1, threshold_joint, np.zeros((1,1)), np.eye(1,1), 1),
+        #     Limit2D("Manipulator Joint 2 Limitation", limit_range_joint2, threshold_joint, np.zeros((1,1)), np.eye(1,1), 2),
+        #     Limit2D("Manipulator Joint 3 Limitation", limit_range_joint3, threshold_joint, np.zeros((1,1)), np.eye(1,1), 3),
+        #     Limit2D("Manipulator Joint 4 Limitation", limit_range_joint4, threshold_joint, np.zeros((1,1)), np.eye(1,1), 4),
+        #     EEPosition3D("End-effector position", task_desired, task_feedForward, task_gain)
+        # ] 
+        # self.controller         = Controller(self.tasks, self.robot, self.weight_matrix)
+        # self.taskID = "3"
+
         
         # SUBCRIBE
         # Subcribe to get manipulator state
@@ -54,6 +74,12 @@ class TP_controller:
         self.goal3D_sub      = rospy.Subscriber(goal_topic, PoseStamped, self.set3DGoal)
         # Subcribe to get task
         self.task_sub      = rospy.Subscriber(task_topic, TaskMsg, self.setTask)
+
+        # Subcribe to get task
+        if MODE == "SIL":
+            self.odom_sub      = rospy.Subscriber(odom_SIL_topic, Odometry, self.mobileBaseJointCB)
+        elif MODE == "HIL":
+            self.odom_sub      = rospy.Subscriber(odom_HIL_topic, Odometry, self.mobileBaseJointCB)
 
         self.listener = tf.TransformListener()
 
@@ -72,7 +98,7 @@ class TP_controller:
         rospy.Timer(rospy.Duration(0.1), self.controllerCallback)
 
         # Timer for TP controller (Velocity Commands)
-        rospy.Timer(rospy.Duration(0.1), self.mobileBaseJointCB)
+        # rospy.Timer(rospy.Duration(0.1), self.mobileBaseJointCB)
 
     def readParams(self):
         # Retrieve parameter from the parameter server
@@ -116,17 +142,18 @@ class TP_controller:
         self.cmd_vel_topic      = rospy.get_param('cmd_vel_topic', default= "/cmd_vel")
         self.cmd_dq_topic       = rospy.get_param('cmd_dq_topic', default= "/turtlebot/swiftpro/joint_velocity_controller/command")
 
-    def mobileBaseJointCB(self, event):
-        # Wait for the TFs to become available  
-        (translation, rotation) = self.listener.lookupTransform(FRAME_MAP, FRAME_BASE_FOOTPRINT, rospy.Time())
+    def mobileBaseJointCB(self, odom):
         # Extract x, y, and theta (in radians) from translation and rotation
-        x       = translation[0]
-        y       = translation[1]
-        z       = translation[2]
-        euler   = tf.transformations.euler_from_quaternion(rotation)
-        theta   = euler[2]
+        x       = odom.pose.pose.position.x
+        y       = odom.pose.pose.position.y
+        z       = odom.pose.pose.position.z
 
-        eta     = np.array([x,y,z,theta]).reshape((4,1))
+        _, _, yaw = tf.transformations.euler_from_quaternion([odom.pose.pose.orientation.x, 
+                                                            odom.pose.pose.orientation.y,
+                                                            odom.pose.pose.orientation.z,
+                                                            odom.pose.pose.orientation.w])
+
+        eta     = np.array([x,y,z,yaw]).reshape((4,1))
 
         self.robot.updateMobileBaseState(eta)
     
@@ -148,7 +175,8 @@ class TP_controller:
 
         # Publish the control message
         self.cmd_pub.publish(mobileBase_msg)
-        self.dq_pub.publish(manipulator_msg)
+        if self.taskID == "3" or self.taskID == "4":
+            self.dq_pub.publish(manipulator_msg)
 
         # Publish the task error message
 
