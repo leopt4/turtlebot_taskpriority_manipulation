@@ -1,6 +1,6 @@
 import numpy as np
 
-MODE                    = "SIL"
+MODE                    = "HIL"
 
 
 FRAME_MAP               = "map"
@@ -11,9 +11,10 @@ ground_truth_topic      = '/turtlebot/kobuki/odom_ground_truth'
 color_camera_SIL_topic  = "/turtlebot/kobuki/realsense/color/image_color"
 color_camera_HIL_topic  = "/turtlebot/kobuki/realsense/color/image_raw"
 camera_info_topic       = "/turtlebot/kobuki/realsense/color/camera_info"
-odom_SIL_topic          = "/odom"
-odom_HIL_topic          = "/odom"
+odom_SIL_topic          = "/state_estimation"
+odom_HIL_topic          = "/state_estimation"
 aruco_pose_topic        = "/aruco_pose"
+wpt_topic               = "/approach_wpt"
 task_topic              = "/task"
 cmd_topic               = "/cmd"
 rviz_goal_topic         = "/move_base_simple/goal"
@@ -22,7 +23,7 @@ goal_topic              = "/goal"
 suction_service         = '/turtlebot/swiftpro/vacuum_gripper/set_pump'
 
 joint_state_topic       = "/turtlebot/joint_states"
-cmd_vel_topic           = "/cmd_vel"
+cmd_vel_topic           = "/cmd_vel_TP"
 cmd_dq_topic            = "/turtlebot/swiftpro/joint_velocity_controller/command"
 EEposition_marker_topic = '~EEposition_point_marker'
 point_marker_topic      = '~desierd_point_marker'
@@ -33,6 +34,7 @@ MAKER_SIZE              = 0.05
 BOX_WIDTH               = 0.07
 BOX_LENGTH              = 0.07
 BOX_HEIGHT              = 0.07
+WPT_THRESHOLD           = 0.25
 
 CAM_BASE_X              = 0.136
 CAM_BASE_Y              = -0.033
@@ -82,7 +84,7 @@ SCAN_HEADING_RANGE_UPER             = 0.0           # [rad]
 SCAN_HEADING_ERROR                  = 0.2           # [rad]
 
 MANI_SAFE_HEIGHT                    = -0.35         # [met]
-MANI_PICK_HEIGHT                    = -0.13             
+MANI_PICK_HEIGHT                    = -0.135         # -0.13          
 MANI_PLACE_HEIGHT                   = -0.14         # [met]
 # BASE ORIENTATION CONTROLLER CONFIG
 BASE_ORI_GAIN                       = 0.1
@@ -95,7 +97,8 @@ BASE_CONFIG_GAIN_HEADING            = 0.8
 BASE_CONFIG_FEEDFORWARD_X           = 0.0
 BASE_CONFIG_FEEDFORWARD_Y           = 0.0
 BASE_CONFIG_FEEDFORWARD_HEADING     = 0.0
-BASE_CONFIG_DIS_ERROR_FINISH        = 0.4
+BASE_CONFIG_DIS_ERROR_FINISH        = 0.15
+BASE_CONFIG_PLACE_DIS_ERROR_FINISH  = 0.30
 BASE_CONFIG_HEADING_ERROR_FINISH    = 0.4
 
 BASE_CONFIG_WEIGHT_BASE_ROTATE      = 10.000
@@ -108,16 +111,16 @@ BASE_CONFIG_WEIGHT_JOINT_4          = 1.000
 # EE POSITION CONTROLLER CONFIG
 EE_POS_GAIN_X                       = 0.2
 EE_POS_GAIN_Y                       = 0.2
-EE_POS_GAIN_Z                       = 0.1
+EE_POS_GAIN_Z                       = 0.2   #0.1
 EE_POS_FEEDFORWARD_X                = 0.0
 EE_POS_FEEDFORWARD_Y                = 0.0
 EE_POS_FEEDFORWARD_Z                = 0.0
-EE_POS_ERROR_FINISH                 = 0.1
+EE_POS_ERROR_FINISH                 = 0.05
 EE_POS_ERROR_PICK_OBJ               = 0.02
 
-EE_POS_WEIGHT_BASE_ROTATE           = 10.0
+EE_POS_WEIGHT_BASE_ROTATE           = 50.0
 EE_POS_WEIGHT_BASE_TRANSLATE        = 150.0
-EE_POS_WEIGHT_JOINT_1               = 0.5
+EE_POS_WEIGHT_JOINT_1               = 0.1
 EE_POS_WEIGHT_JOINT_2               = 1.0
 EE_POS_WEIGHT_JOINT_3               = 1.0
 EE_POS_WEIGHT_JOINT_4               = 1.0
@@ -133,8 +136,8 @@ JOINT_POS_ERROR_FINISH              = 0.1           # [rad]
 
 
 # GOAL PLACE
-GOAL_PLACE_X                        = 5.0
-GOAL_PLACE_Y                        = 1.0
+GOAL_PLACE_X                        = 0.0
+GOAL_PLACE_Y                        = 0.0
 
 # TASK
 N_OBJECT                            = 1.0

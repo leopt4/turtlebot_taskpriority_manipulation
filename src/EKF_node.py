@@ -11,6 +11,7 @@ from utils.EKF.EKF_3DOF_InputDisplacement_Heading import *
 
 from utils.EKF.Odometry import *
 from utils.EKF.Magnetometer import *
+from config import *
 
 odom_freq   = 0.1
 odom_window = 100000.0
@@ -26,7 +27,7 @@ class EKF:
         self.x_map        = np.zeros((3, 1))        # Robot pose in the map frame
         self.x_frame_k    = np.zeros((3, 1))        # k frame pose in the map frame
 
-        self.mode         = rospy.get_param('~mode')
+        self.mode         = MODE
 
         # PUBLISHERS
         # Publisher for visualizing the path to with rviz
