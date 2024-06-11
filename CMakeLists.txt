@@ -50,6 +50,7 @@ find_package(message_generation REQUIRED)
 add_message_files(
   FILES
   TaskMsg.msg
+  CmdMsg.msg
 )
 
 ## Generate services in the 'srv' folder
